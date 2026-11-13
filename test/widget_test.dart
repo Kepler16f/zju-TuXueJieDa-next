@@ -69,27 +69,27 @@ void main() {
     test('matches exact platform and ABI release assets', () {
       const assets = [
         ReleaseAsset(
-          name: 'zju-TuXueJieDa-next-v0.0.2-windows-arm64.zip',
-          downloadUrl: 'https://example.com/win-arm64.zip',
+          name: '图学基础教程习题解答-Windows-arm64-0.0.2-setup.exe',
+          downloadUrl: 'https://example.com/win-arm64-setup.exe',
           size: 100,
         ),
         ReleaseAsset(
-          name: 'zju-TuXueJieDa-next-v0.0.2-windows-x64.zip',
-          downloadUrl: 'https://example.com/win-x64.zip',
+          name: '图学基础教程习题解答-Windows-x64-0.0.2-setup.exe',
+          downloadUrl: 'https://example.com/win-x64-setup.exe',
           size: 100,
         ),
         ReleaseAsset(
-          name: 'zju-TuXueJieDa-next-v0.0.2-android-arm64-v8a.apk',
+          name: '图学基础教程习题解答-Android-arm64-0.0.2.apk',
           downloadUrl: 'https://example.com/android-arm64.apk',
           size: 100,
         ),
         ReleaseAsset(
-          name: 'zju-TuXueJieDa-next-v0.0.2-android-x86_64.apk',
+          name: '图学基础教程习题解答-Android-x86_64-0.0.2.apk',
           downloadUrl: 'https://example.com/android-x86_64.apk',
           size: 100,
         ),
         ReleaseAsset(
-          name: 'zju-TuXueJieDa-next-v0.0.2-linux-arm64.AppImage',
+          name: '图学基础教程习题解答-Linux-arm64-0.0.2.AppImage',
           downloadUrl: 'https://example.com/linux-arm64.AppImage',
           size: 100,
         ),
@@ -105,7 +105,7 @@ void main() {
             supportsDirectInstall: true,
           ),
         )?.name,
-        'zju-TuXueJieDa-next-v0.0.2-windows-arm64.zip',
+        '图学基础教程习题解答-Windows-arm64-0.0.2-setup.exe',
       );
       expect(
         UpdateService.matchAssetForPlatform(
@@ -117,7 +117,7 @@ void main() {
             supportsDirectInstall: true,
           ),
         )?.name,
-        'zju-TuXueJieDa-next-v0.0.2-android-arm64-v8a.apk',
+        '图学基础教程习题解答-Android-arm64-0.0.2.apk',
       );
       expect(
         UpdateService.matchAssetForPlatform(
@@ -129,7 +129,7 @@ void main() {
             supportsDirectInstall: true,
           ),
         )?.name,
-        'zju-TuXueJieDa-next-v0.0.2-linux-arm64.AppImage',
+        '图学基础教程习题解答-Linux-arm64-0.0.2.AppImage',
       );
     });
   });
