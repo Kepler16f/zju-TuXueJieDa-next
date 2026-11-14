@@ -26,6 +26,7 @@ on:
           - macos
           - linux
           - ios
+          - ohos
       ref:
         description: '构建的代码引用（留空 = main；补发历史版本时填 tag 如 v0.1.3）'
         required: false
@@ -248,16 +249,79 @@ jobs:
           archive: false
           if-no-files-found: error
 
+  ohos:
+    name: HarmonyOS HAP (arm64, unsigned)
+    needs: test
+    if: ${{ inputs.targets == 'all' || inputs.targets == 'ohos' }}
+    runs-on: ubuntu-latest
+    env:
+      FLUTTER_OHOS_REPO: https://gitcode.com/openharmony-tpc/flutter_flutter.git
+      FLUTTER_OHOS_REF: 3.27.5-ohos-1.0.8
+      PUB_HOSTED_URL: https://pub.flutter-io.cn
+      FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || 'main' }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Setup HarmonyOS SDK and command-line tools
+        uses: ErBWs/setup-ohos@v2
+        with:
+          version: 26.0.0.821
+          cache: true
+      - name: Clone Flutter-ohos SDK
+        run: |
+          FLUTTER_OHOS_DIR="$RUNNER_TEMP/flutter_ohos"
+          git clone --branch "$FLUTTER_OHOS_REF" --depth 1 "$FLUTTER_OHOS_REPO" "$FLUTTER_OHOS_DIR"
+          cd "$FLUTTER_OHOS_DIR"
+          git config --global --add safe.directory "$FLUTTER_OHOS_DIR"
+          echo "$FLUTTER_OHOS_DIR/bin" >> "$GITHUB_PATH"
+          echo "FLUTTER_ROOT=$FLUTTER_OHOS_DIR" >> "$GITHUB_ENV"
+      - name: Configure npm registry
+        run: |
+          echo "registry=https://repo.huaweicloud.com/repository/npm/" > ~/.npmrc
+          echo "@ohos:registry=https://repo.harmonyos.com/npm/" >> ~/.npmrc
+      - name: Init OHOS host project + plugin overlay
+        run: |
+          bash scripts/setup_ohos.sh
+          flutter pub get
+      - name: Build HAP (unsigned fallback)
+        run: |
+          set +e
+          flutter build hap --release --target-platform ohos-arm64
+          status=$?
+          set -e
+          hap=$(find ohos/entry/build -type f -name '*.hap' 2>/dev/null | head -1)
+          if [ -z "$hap" ]; then
+            echo "::error::no HAP produced (flutter exit $status)"
+            find ohos -name '*.hap' -print || true
+            exit 1
+          fi
+          if [ "$status" -ne 0 ]; then
+            echo "::notice::flutter exited $status (missing signing config); using unsigned HAP from hvigor"
+          fi
+          cp "$hap" "tuxuejieda-HarmonyOS-arm64-${{ inputs.version }}-unsigned.hap"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ohos-hap
+          path: tuxuejieda-HarmonyOS-arm64-*-unsigned.hap
+          archive: false
+          if-no-files-found: error
+
   release:
     name: Publish GitHub Release
-    needs: [android, windows, macos, linux, ios]
+    needs: [android, windows, macos, linux, ios, ohos]
     if: >-
       ${{ always() && inputs.create_release &&
           needs.windows.result == 'success' &&
           (needs.android.result == 'success' || needs.android.result == 'skipped') &&
           (needs.macos.result == 'success' || needs.macos.result == 'skipped') &&
           (needs.linux.result == 'success' || needs.linux.result == 'skipped') &&
-          (needs.ios.result == 'success' || needs.ios.result == 'skipped') }}
+          (needs.ios.result == 'success' || needs.ios.result == 'skipped') &&
+          (needs.ohos.result == 'success' || needs.ohos.result == 'skipped') }}
     runs-on: ubuntu-latest
     steps:
       - name: Download windows installers
@@ -275,14 +339,14 @@ jobs:
       - name: Download macos/linux/ios artifacts
         uses: actions/download-artifact@v7
         with:
-          pattern: "{macos-app,linux-bundle,ios-ipa}"
+          pattern: "{macos-app,linux-bundle,ios-ipa,ohos-hap}"
           path: stage
           merge-multiple: true
       - name: Checksums
         run: |
           cd stage
           files=()
-          for f in *.apk *.exe *.zip *.tar.gz; do [ -e "$f" ] && files+=("$f"); done
+          for f in *.apk *.exe *.zip *.tar.gz *.hap; do [ -e "$f" ] && files+=("$f"); done
           sha256sum "${files[@]}" > SHA256SUMS.txt
       - name: Publish release (gh CLI)
         env:
@@ -308,6 +372,7 @@ jobs:
             echo "- macOS 应用未签名：首次打开需右键 → 打开，或在终端执行 xattr -cr"
             echo "- iOS IPA 未签名：需自签（AltStore/Sideloadly/TrollStore 等）后安装"
             echo "- Linux 包为 x64 便携 bundle（视频播放暂未支持，后续接入 media_kit）"
+            echo "- 鸿蒙 HAP 未签名：需 DevEco Studio 签名后安装（或使用企业证书分发）"
             echo "- SHA256SUMS.txt 为上述产物的校验和"
             echo "- 非官方学生重制项目，仅供个人学习交流；原内容版权归原出版方所有。"
           } > notes.md
