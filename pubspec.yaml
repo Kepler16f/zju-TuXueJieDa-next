@@ -4,7 +4,7 @@ publish_to: 'none'
 version: 0.1.2+4
 
 environment:
-  sdk: ^3.13.7  # 鸿蒙 fork 同样使用 oh-3.47.9-dev（Dart 3.13.7）
+  sdk: ">=3.13.5 <4.0.0"  # 下限取自鸿蒙 fork oh-3.47.9-dev（Dart 3.13.5）
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
