@@ -41,6 +41,93 @@ std::vector<std::string> GetCommandLineArguments() {
   return command_line_arguments;
 }
 
+namespace {
+
+// State threaded through the window enumeration callback.
+struct SameExecutableSearch {
+  const wchar_t* window_class;
+  const wchar_t* exe_basename;
+  HWND window;
+};
+
+// Case-insensitively compares the base name of |image_path| (its length in
+// UTF-16 units is |image_path_chars|) against |exe_basename|.
+bool ImageBaseNameMatches(const wchar_t* image_path, DWORD image_path_chars,
+                          const wchar_t* exe_basename) {
+  const wchar_t* image_name = image_path + image_path_chars;
+  while (image_name > image_path && image_name[-1] != L'\\' &&
+         image_name[-1] != L'/') {
+    --image_name;
+  }
+  const int image_name_length =
+      static_cast<int>(image_path + image_path_chars - image_name);
+  const int result = ::CompareStringW(LOCALE_INVARIANT, NORM_IGNORECASE,
+                                      image_name, image_name_length,
+                                      exe_basename, -1);
+  return result == CSTR_EQUAL;
+}
+
+BOOL CALLBACK EnumWindowsForSameExecutable(HWND window, LPARAM lparam) {
+  auto* search = reinterpret_cast<SameExecutableSearch*>(lparam);
+
+  wchar_t class_name[128];
+  if (::GetClassNameW(window, class_name,
+                      static_cast<int>(sizeof(class_name) / sizeof(wchar_t))) ==
+      0) {
+    return TRUE;
+  }
+  if (::wcscmp(class_name, search->window_class) != 0) {
+    return TRUE;
+  }
+
+  DWORD process_id = 0;
+  ::GetWindowThreadProcessId(window, &process_id);
+  if (process_id == 0) {
+    return TRUE;
+  }
+  ::HANDLE process =
+      ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, process_id);
+  if (!process) {
+    return TRUE;
+  }
+  wchar_t image_path[MAX_PATH];
+  DWORD image_path_chars = MAX_PATH;
+  const bool matches =
+      ::QueryFullProcessImageNameW(process, 0, image_path, &image_path_chars) &&
+      ImageBaseNameMatches(image_path, image_path_chars, search->exe_basename);
+  ::CloseHandle(process);
+  if (matches) {
+    search->window = window;
+    return FALSE;  // A match was found; stop enumerating.
+  }
+  return TRUE;
+}
+
+}  // namespace
+
+HWND FindWindowOfSameExecutable(const wchar_t* window_class) {
+  wchar_t self_path[MAX_PATH];
+  const DWORD self_path_chars = ::GetModuleFileNameW(nullptr, self_path, MAX_PATH);
+  if (self_path_chars == 0 || self_path_chars >= MAX_PATH) {
+    return nullptr;
+  }
+  self_path[self_path_chars] = L'\0';
+
+  const wchar_t* self_basename = self_path + self_path_chars;
+  while (self_basename > self_path && self_basename[-1] != L'\\' &&
+         self_basename[-1] != L'/') {
+    --self_basename;
+  }
+
+  SameExecutableSearch search{};
+  search.window_class = window_class;
+  search.exe_basename = self_basename;
+  search.window = nullptr;
+  ::EnumWindows(EnumWindowsForSameExecutable,
+                reinterpret_cast<LPARAM>(&search));
+  return search.window;
+}
+
 std::string Utf8FromUtf16(const wchar_t* utf16_string) {
   if (utf16_string == nullptr) {
     return std::string();

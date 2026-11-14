@@ -62,7 +62,7 @@ CHAPTERS: list[dict[str, str]] = [
 ]
 
 # Ground-truth 177 active problems mapped from settled VWSC sprite buttons and
-# visually verified rendered button labels (`第XX页 No.Y题`).
+# visually verified rendered button labels (`第XX页第Y题`).
 # Tuple: (chapter_id, group_index, tihao, display_page, display_no)
 VERIFIED_PROBLEMS: list[tuple[str, int, str, int, str]] = [
     # --- jcty (64 problems) ---
@@ -560,15 +560,33 @@ def decode_xmed_text(xb: bytes) -> str:
     return "\n".join(lines)
 
 
-def apply_ink(sprite_img: Image.Image, ink: int) -> Image.Image:
-    """Apply Director sprite ink onto an RGBA image before alpha compositing."""
+def apply_ink(sprite_img: Image.Image, ink: int, recolor_rgb: tuple[int, int, int] | None = None) -> Image.Image:
+    """Apply Director sprite ink onto an RGBA image before alpha compositing.
+
+    recolor_rgb = optional RGB that dark pixels (lum < 128) are repainted with
+    after keying. Director sprites carry a foreground color index (rec[2]:
+    0x00 = white, 0xff = black, else the gray ramp) which the projector uses
+    to tint mask/eraser members; we approximate that per ink type.
+    """
     arr = np.array(sprite_img, dtype=np.uint8)
     r, g, b, a = arr[:, :, 0], arr[:, :, 1], arr[:, :, 2], arr[:, :, 3]
     is_white = (r >= 252) & (g >= 252) & (b >= 252)
 
     if ink in (1, 36):  # Transparent / BgTransparent -> white pixels transparent
         arr[:, :, 3] = np.where(is_white, 0, a)
+        if recolor_rgb is not None:
+            dark = (r < 128) & (g < 128) & (b < 128) & (arr[:, :, 3] > 0)
+            arr[:, :, 0][dark] = recolor_rgb[0]
+            arr[:, :, 1][dark] = recolor_rgb[1]
+            arr[:, :, 2][dark] = recolor_rgb[2]
         return Image.fromarray(arr, mode="RGBA")
+
+    if ink == 4:  # Mask -> dark pixels take the fg color, light ones vanish
+        is_dark = (r < 128) & (g < 128) & (b < 128)
+        out = np.zeros_like(arr)
+        fill = recolor_rgb if recolor_rgb is not None else (255, 255, 255)
+        out[is_dark] = [fill[0], fill[1], fill[2], 255]
+        return Image.fromarray(out, mode="RGBA")
 
     if ink == 8:  # Matte -> flood-fill outer contiguous white from borders
         h, w = is_white.shape
@@ -595,16 +613,29 @@ def apply_ink(sprite_img: Image.Image, ink: int) -> Image.Image:
                     visited[ny, nx] = True
                     q.append((ny, nx))
         arr[:, :, 3] = np.where(visited, 0, a)
+        # Matte members double as erasers/masks: their dark pixels take the
+        # sprite's foreground color. fg=0x00 (white) turns e.g. the black pie
+        # wedges of jieP45_59 into white erasers that wipe the pre-drawn arcs
+        # off the base figure; fg=0xff (black) keeps dark artwork black.
+        if recolor_rgb is not None:
+            dark = (r < 128) & (g < 128) & (b < 128) & (arr[:, :, 3] > 0)
+            arr[:, :, 0][dark] = recolor_rgb[0]
+            arr[:, :, 1][dark] = recolor_rgb[1]
+            arr[:, :, 2][dark] = recolor_rgb[2]
         return Image.fromarray(arr, mode="RGBA")
-
-    if ink == 4:  # NotCopy (white cutout mask wedge in jieP46_60_2 -> make dark mask white, light transparent)
-        is_dark = (r < 128) & (g < 128) & (b < 128)
-        out = np.zeros_like(arr)
-        out[is_dark] = [255, 255, 255, 255]
-        return Image.fromarray(out, mode="RGBA")
 
     # Copy (0) or fallback
     return sprite_img
+
+
+def _palette(index: int) -> tuple[int, int, int]:
+    """Director default palette approximation: 0x00 = white, 0xff = black,
+    everything else the gray ramp (matches the FCOL chunk of the jieti movies)."""
+    if index == 0:
+        return (255, 255, 255)
+    if index == 255:
+        return (0, 0, 0)
+    return (index, index, index)
 
 
 def is_legacy_chrome(
@@ -681,6 +712,39 @@ def extract_problem_pair(
     return subj, ans
 
 
+def _is_white_cover_patch(img: Image.Image, target_sz: tuple[int, int]) -> bool:
+    """True for legacy white-out cover sprites: an opaque, near-white fill whose
+    only other pixels are a light/dark gray border. These sprites hide the
+    previous step's ink between frames; the embedded border looks bad in the
+    modern viewer, so the compositor replaces them with a pure white rect.
+
+    Guarded against the full-stage base drawing and colored content: the base
+    carries thousands of vivid cyan pixels and the yellow highlight strokes are
+    vivid too, while a genuine cover has none — so a tiny absolute vivid-pixel
+    budget cleanly separates them (measured on jieP35_41: cover vivid=0,
+    base vivid≈20k, 'X' strokes vivid≈1.3k).
+    """
+    if target_sz[0] * target_sz[1] > 0.5 * STAGE_W * STAGE_H:
+        return False
+    if img.mode != "RGBA":
+        return False
+    alpha = img.getchannel("A").histogram()
+    total = img.width * img.height
+    if sum(alpha[250:]) / total < 0.90:
+        return False
+    white = vivid = 0
+    buf = img.convert("RGB").tobytes()
+    for i in range(0, len(buf), 3):
+        r, g, b = buf[i], buf[i + 1], buf[i + 2]
+        if r >= 225 and g >= 225 and b >= 225:
+            white += 1
+        elif max(r, g, b) - min(r, g, b) > 30 or (r * 299 + g * 587 + b * 114) // 1000 > 240:
+            vivid += 1
+            if vivid > 30:
+                return False
+    return white / total >= 0.90 and vivid <= 30
+
+
 def extract_jieti_steps(
     th: str,
     txt_map: dict[str, str],
@@ -717,8 +781,9 @@ def extract_jieti_steps(
 
     # Decode member bitmaps cache per .dir file
     bmp_cache: dict[int, Image.Image] = {}
-    ink_cache: dict[tuple[int, int, tuple[int, int], int], Image.Image] = {}
+    ink_cache: dict[tuple[int, int, tuple[int, int], int, bool, bool, tuple[int, int, int] | None], Image.Image] = {}
     xmed_cache: dict[int, str] = {}
+    member_dark_frac: dict[int, float] = {}
 
     steps_raw: list[dict[str, Any]] = []
     for fidx in key_frames:
@@ -735,6 +800,9 @@ def extract_jieti_steps(
             rec = fr[ch]
             if rec[0] == 0:
                 continue
+            # NOTE: rec[22] bit 0x80 is a per-frame "record rewritten" delta
+            # marker, NOT a visibility flag (the f35 answer bitmap carries 01
+            # and must still paint). Do not filter on it.
             clib, cmem = struct.unpack(">HH", rec[4:8])
             if clib != 1 or cmem == 0:
                 continue
@@ -758,29 +826,79 @@ def extract_jieti_steps(
             ink = rec[1] & 0x3F
             sid = struct.unpack(">H", rec[10:12])[0]
             behs = [members.get(bm, {}).get("script", "") for _, bm in spans.get(sid, [])]
-
-            left = px - regX
-            top = py - regY
-            if is_legacy_chrome(mem, top, h, behs, is_tabbed):
-                continue
+            # Sprite flip bits live in rec[22] (0x40 = flipH, 0x20 = flipV).
+            # Ignoring them renders mirrored overlays (e.g. the yellow helper
+            # lines of 35_41 / 45_59 appear side-swapped).
+            flip_flags = rec[22] if len(rec) >= 23 else 0
+            flip_h = bool(flip_flags & 0x40)
+            flip_v = bool(flip_flags & 0x20)
 
             if cmem not in bmp_cache:
                 alfa = df.chunks[mem["chunks"]["ALFA"]][1] if "ALFA" in mem["chunks"] else None
                 bmp_cache[cmem] = decode_bitd_rgba(
                     mem["spec"], df.chunks[mem["chunks"]["BITD"]][1], alfa
                 )
+                _arr = np.array(bmp_cache[cmem])
+                _op = _arr[:, :, 3] == 255
+                if _op.any():
+                    _px = _arr[_op][:, :3].astype(np.int32)
+                    _lum = (_px * [299, 587, 114]).sum(axis=1) // 1000
+                    member_dark_frac[cmem] = float(((_lum < 128).sum()) / len(_px))
+                else:
+                    member_dark_frac[cmem] = 0.0
             base_sp = bmp_cache[cmem]
             target_sz = (w, h) if (w > 0 and h > 0) else base_sp.size
+
+            # Director scales the member bitmap to the sprite rect (w, h) and
+            # scales the regPoint by the same factor: loc = topLeft + regPoint*scale.
+            # The score record stores the stage loc of the (scaled) regPoint, so
+            # the paste origin must subtract the SCALED regPoint, not the raw one.
+            # (Unscaled subtraction misaligns every overlay whose sprite rect
+            # differs from the member's natural size.)
+            scale_x = target_sz[0] / base_sp.size[0]
+            scale_y = target_sz[1] / base_sp.size[1]
+            left = round(px - regX * scale_x)
+            top = round(py - regY * scale_y)
+            if is_legacy_chrome(mem, top, h, behs, is_tabbed):
+                continue
+
             rot_centideg = struct.unpack(">i", rec[28:32])[0] if len(rec) >= 32 else 0
             rot_key = rot_centideg if (ink == 4 and abs(rot_centideg) in (9000, 18000, 27000)) else 0
-            cache_k = (cmem, ink, target_sz, rot_key)
+            fg_index = rec[2] if len(rec) >= 3 else 0
+            # Foreground-color recoloring (Director rec[2] palette index):
+            #   ink 8  -> dark pixels take palette[fg] (0x00=white erasers,
+            #             0xff=black, else the gray ramp);
+            #   ink1/36 -> only thin line-art members gray out mid-fg values,
+            #             so label glyphs (dark-majority) stay untouched;
+            #   ink 0  -> a dark-majority member with fg=white is an eraser
+            #             (jieP45_59's pie wedge wipes the pre-drawn arc).
+            dark_frac = member_dark_frac.get(cmem, 1.0)
+            recolor_rgb: tuple[int, int, int] | None = None
+            ink_eff = ink
+            if ink == 8:
+                recolor_rgb = _palette(fg_index)
+            elif ink in (1, 36) and 0 < fg_index < 255 and dark_frac <= 0.2:
+                recolor_rgb = (fg_index, fg_index, fg_index)
+            elif ink == 0 and fg_index == 0 and dark_frac >= 0.5:
+                # Dark-dominant shape with a white fg color = white eraser.
+                ink_eff = 4
+                recolor_rgb = (255, 255, 255)
+            cache_k = (cmem, ink_eff, target_sz, rot_key, flip_h, flip_v, recolor_rgb)
             if cache_k not in ink_cache:
                 sp_img = base_sp
                 if target_sz != sp_img.size:
                     sp_img = sp_img.resize(target_sz, Image.Resampling.BILINEAR)
+                if flip_h:
+                    sp_img = sp_img.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+                if flip_v:
+                    sp_img = sp_img.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
                 if rot_key:
                     sp_img = sp_img.rotate(-rot_key / 100.0, expand=False)
-                ink_cache[cache_k] = apply_ink(sp_img, ink)
+                sp_inked = apply_ink(sp_img, ink_eff, recolor_rgb=recolor_rgb)
+                if _is_white_cover_patch(sp_inked, target_sz):
+                    # Legacy covers embed an ugly dark border; use pure white.
+                    sp_inked = Image.new("RGBA", sp_inked.size, (255, 255, 255, 255))
+                ink_cache[cache_k] = sp_inked
             if rot_key:
                 left = px - target_sz[0] // 2
                 top = py - target_sz[1] // 2
@@ -811,8 +929,8 @@ def extract_jieti_steps(
     steps_dir.mkdir(parents=True, exist_ok=True)
     steps_meta: list[dict[str, Any]] = []
     for idx, st in enumerate(steps_raw):
-        fname = f"{th}_{idx + 1:02d}.png"
-        st["image"].save(steps_dir / fname, optimize=True)
+        fname = f"{th}_{idx + 1:02d}.webp"
+        st["image"].save(steps_dir / fname, quality=80, method=6)
         if is_tabbed:
             title = tab_overrides.get(st["label"], st["label"] or f"视图 {idx + 1}")
         elif len(steps_raw) <= 2:
@@ -944,7 +1062,7 @@ def main() -> None:
                 "orderInChapter": chap_counters[chap_id],
                 "page": page,
                 "no": no_str,
-                "displayLabel": f"第 {page} 页 No.{no_str} 题",
+                "displayLabel": f"第 {page} 页第 {no_str} 题",
                 "statement": stmt,
                 "subjectImage": subj_asset,
                 "answerImage": ans_asset,
@@ -1002,5 +1120,61 @@ def main() -> None:
     print(f"Spot-check saved to: {spot_path}")
 
 
+def steps_only() -> None:
+    """Re-extract only the jieti step composites, preserving curriculum.json.
+
+    Keeps chapters / subjects / answers / videos untouched; rewrites each
+    problem's steps + jietiMode in place and reports filename-set changes.
+    """
+    txt_df = DirFile(SOURCE_ROOT / "text.cst")
+    txt_map: dict[str, str] = {}
+    for v in txt_df.get_internal_members().values():
+        if v["name"] and "XMED" in v["chunks"]:
+            txt_map[v["name"].lower()] = decode_xmed_text(txt_df.chunks[v["chunks"]["XMED"]][1])
+
+    cur_path = ASSETS_ROOT / "data" / "curriculum.json"
+    curriculum = json.loads(cur_path.read_text(encoding="utf-8"))
+    steps_dir = ASSETS_ROOT / "steps"
+    old_files = sorted(p.name for p in steps_dir.glob("*.png"))
+
+    count_changes: list[str] = []
+    for p in curriculum["problems"]:
+        th = p["id"]
+        old_n = len(p["steps"])
+        mode, steps_meta = extract_jieti_steps(th, txt_map)
+        if len(steps_meta) != old_n:
+            count_changes.append(f"{th}: {old_n} -> {len(steps_meta)}")
+        p["jietiMode"] = mode
+        p["steps"] = steps_meta
+
+    cur_path.write_text(
+        json.dumps(curriculum, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+    new_files = sorted(p.name for p in steps_dir.glob("*.png"))
+    referenced = {
+        s["image"].split("/")[-1] for p in curriculum["problems"] for s in p["steps"]
+    }
+    extra = sorted(set(new_files) - set(old_files))
+    missing = sorted(set(old_files) - set(new_files))
+    stale = sorted(set(new_files) - referenced)
+    for f in stale:
+        (steps_dir / f).unlink()
+    print(f"steps files: {len(old_files)} -> {len(new_files)} (referenced {len(referenced)})")
+    if extra:
+        print(f"  extra files: {len(extra)}: {extra[:20]}")
+    if missing:
+        print(f"  missing files: {len(missing)}: {missing[:20]}")
+    if count_changes:
+        print(f"  step count changes ({len(count_changes)}): {count_changes[:20]}")
+    if stale:
+        print(f"  removed stale: {len(stale)}")
+
+
 if __name__ == "__main__":
-    main()
+    import sys
+
+    if "--steps-only" in sys.argv:
+        steps_only()
+    else:
+        main()

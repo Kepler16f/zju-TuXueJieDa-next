@@ -19,12 +19,58 @@ class ProblemVideoPlayer extends StatefulWidget {
   State<ProblemVideoPlayer> createState() => _ProblemVideoPlayerState();
 }
 
+/// Immutable snapshot of the [VideoPlayerValue] fields that drive the widget
+/// tree (everything except the per-frame playback position). The player
+/// listener rebuilds only when one of these fields actually changes, so the
+/// position stream no longer triggers a whole-tree [setState] every frame.
+class _PlayerSnapshot {
+  const _PlayerSnapshot({
+    this.initialized = false,
+    this.playing = false,
+    this.buffering = false,
+    this.looping = false,
+    this.duration = Duration.zero,
+    this.size = Size.zero,
+    this.aspectRatio = 0,
+    this.errorText = '',
+  });
+
+  final bool initialized;
+  final bool playing;
+  final bool buffering;
+  final bool looping;
+  final Duration duration;
+  final Size size;
+  final double aspectRatio;
+  final String errorText;
+
+  bool differsFrom(_PlayerSnapshot other) =>
+      initialized != other.initialized ||
+      playing != other.playing ||
+      buffering != other.buffering ||
+      looping != other.looping ||
+      duration != other.duration ||
+      size != other.size ||
+      aspectRatio != other.aspectRatio ||
+      errorText != other.errorText;
+}
+
 class _ProblemVideoPlayerState extends State<ProblemVideoPlayer> {
   VideoPlayerController? _controller;
   Object? _error;
   bool _loading = true;
   bool _looping = true;
   double _speed = 1.0;
+
+  /// 状态快照：listener 仅在这些字段变化时才整树 setState。
+  _PlayerSnapshot _snap = const _PlayerSnapshot();
+
+  /// 播放进度走独立 notifier：由 listener 直接更新、不触发整树重建，
+  /// 进度条与时间文本通过 ValueListenableBuilder 局部消费。
+  final ValueNotifier<Duration> _position = ValueNotifier<Duration>(Duration.zero);
+
+  /// 拖动进度条期间为 true：listener 暂停写入 notifier，避免拇指回跳。
+  bool _seeking = false;
 
   @override
   void initState() {
@@ -44,13 +90,19 @@ class _ProblemVideoPlayerState extends State<ProblemVideoPlayer> {
   @override
   void dispose() {
     _disposeController();
+    // 子树（含 ValueListenableBuilder）先于父 State 卸载，此刻已解除订阅，
+    // 可以安全释放进度 notifier。
+    _position.dispose();
     super.dispose();
   }
 
   Future<void> _initController() async {
+    _disposeController();
+    if (!mounted) return;
     setState(() {
       _loading = true;
       _error = null;
+      _snap = const _PlayerSnapshot();
     });
 
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.linux) {
@@ -70,28 +122,58 @@ class _ProblemVideoPlayerState extends State<ProblemVideoPlayer> {
       await ctrl.setLooping(_looping);
       await ctrl.setPlaybackSpeed(_speed);
       await ctrl.play();
-      if (!mounted) return;
-      setState(() => _loading = false);
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || _controller != ctrl) return;
       setState(() {
         _loading = false;
         _error = e;
       });
+      return;
     }
+    if (!mounted || _controller != ctrl) return;
+    setState(() => _loading = false);
   }
 
   void _disposeController() {
     final ctrl = _controller;
     _controller = null;
+    _seeking = false;
     if (ctrl != null) {
       ctrl.removeListener(_onPlayerUpdate);
       unawaited(ctrl.dispose());
     }
+    // 切换视频时重置进度。注意这里不能 dispose notifier：树中的
+    // ValueListenableBuilder 仍订阅着它，提前 dispose 会在其更新/卸载时
+    // 触发 ChangeNotifier 的 debug 断言；notifier 在本 State 最终
+    // dispose 时与控制器一并释放。
+    _position.value = Duration.zero;
   }
 
   void _onPlayerUpdate() {
-    if (mounted) setState(() {});
+    final ctrl = _controller;
+    if (ctrl == null || !mounted) return;
+    final value = ctrl.value;
+
+    // 进度单独走 notifier：每帧更新不进入 setState。
+    if (value.isInitialized &&
+        !_seeking &&
+        value.position != _position.value) {
+      _position.value = value.position;
+    }
+
+    final next = _PlayerSnapshot(
+      initialized: value.isInitialized,
+      playing: value.isPlaying,
+      buffering: value.isBuffering,
+      looping: value.isLooping,
+      duration: value.duration,
+      size: value.size,
+      aspectRatio: value.aspectRatio,
+      errorText: value.errorDescription ?? '',
+    );
+    if (next.differsFrom(_snap)) {
+      setState(() => _snap = next);
+    }
   }
 
   String _fmtDuration(Duration d) {
@@ -118,16 +200,25 @@ class _ProblemVideoPlayerState extends State<ProblemVideoPlayer> {
     }
 
     final ctrl = _controller;
-    if (_error != null || ctrl == null || !ctrl.value.isInitialized) {
+    final snap = _snap;
+    final controllerError = ctrl?.value.errorDescription;
+    final hasControllerError =
+        controllerError != null && controllerError.isNotEmpty;
+    if (_error != null ||
+        ctrl == null ||
+        !snap.initialized ||
+        hasControllerError) {
+      final errorText = _error?.toString() ?? controllerError ?? '未知错误';
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.videocam_off_rounded, size: 42, color: theme.colorScheme.error),
+              Icon(Icons.videocam_off_rounded,
+                  size: 42, color: theme.colorScheme.error),
               const SizedBox(height: 12),
-              Text('视频初始化失败：${_error ?? '未知错误'}', textAlign: TextAlign.center),
+              Text('视频加载失败：$errorText', textAlign: TextAlign.center),
               const SizedBox(height: 12),
               FilledButton.icon(
                 onPressed: _initController,
@@ -140,9 +231,7 @@ class _ProblemVideoPlayerState extends State<ProblemVideoPlayer> {
       );
     }
 
-    final val = ctrl.value;
-    final durMs = val.duration.inMilliseconds.clamp(1, 1 << 30);
-    final posMs = val.position.inMilliseconds.clamp(0, durMs);
+    final aspectRatio = snap.aspectRatio > 0 ? snap.aspectRatio : 4 / 3;
 
     return Container(
       color: const Color(0xFF101318),
@@ -151,14 +240,22 @@ class _ProblemVideoPlayerState extends State<ProblemVideoPlayer> {
           Expanded(
             child: Center(
               child: AspectRatio(
-                aspectRatio: val.aspectRatio > 0 ? val.aspectRatio : 4 / 3,
+                aspectRatio: aspectRatio,
                 child: GestureDetector(
-                  onTap: () => val.isPlaying ? ctrl.pause() : ctrl.play(),
+                  onTap: () => snap.playing ? ctrl.pause() : ctrl.play(),
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
                       VideoPlayer(ctrl),
-                      if (!val.isPlaying)
+                      if (snap.buffering)
+                        const Padding(
+                          padding: EdgeInsets.all(10),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Colors.white70,
+                          ),
+                        ),
+                      if (!snap.playing)
                         Container(
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
@@ -183,23 +280,60 @@ class _ProblemVideoPlayerState extends State<ProblemVideoPlayer> {
             child: Row(
               children: [
                 IconButton(
-                  tooltip: val.isPlaying ? '暂停' : '播放',
+                  tooltip: snap.playing ? '暂停' : '播放',
                   icon: Icon(
-                    val.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                    snap.playing
+                        ? Icons.pause_rounded
+                        : Icons.play_arrow_rounded,
                     color: Colors.white,
                   ),
-                  onPressed: () => val.isPlaying ? ctrl.pause() : ctrl.play(),
-                ),
-                Text(
-                  '${_fmtDuration(val.position)} / ${_fmtDuration(val.duration)}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  onPressed: () => snap.playing ? ctrl.pause() : ctrl.play(),
                 ),
                 Expanded(
-                  child: Slider(
-                    value: posMs.toDouble(),
-                    min: 0,
-                    max: durMs.toDouble(),
-                    onChanged: (v) => ctrl.seekTo(Duration(milliseconds: v.round())),
+                  child: ValueListenableBuilder<Duration>(
+                    valueListenable: _position,
+                    builder: (context, position, _) {
+                      final durMs =
+                          snap.duration.inMilliseconds.clamp(1, 1 << 30);
+                      final posMs = position.inMilliseconds.clamp(0, durMs);
+                      return Row(
+                        children: [
+                          Text(
+                            '${_fmtDuration(position)} / ${_fmtDuration(snap.duration)}',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                          ),
+                          Expanded(
+                            child: Slider(
+                              value: posMs.toDouble(),
+                              min: 0,
+                              max: durMs.toDouble(),
+                              onChanged: (v) {
+                                // 拖动期间同步 notifier 并暂停 listener
+                                // 写入，避免未到位的播放进度把拇指拉回去。
+                                final target = Duration(milliseconds: v.round());
+                                _seeking = true;
+                                _position.value = target;
+                                unawaited(ctrl.seekTo(target));
+                              },
+                              onChangeEnd: (v) async {
+                                try {
+                                  await ctrl.seekTo(
+                                    Duration(milliseconds: v.round()),
+                                  );
+                                } catch (_) {
+                                  // seek 失败也要恢复进度同步。
+                                } finally {
+                                  _seeking = false;
+                                }
+                              },
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
                 IconButton(

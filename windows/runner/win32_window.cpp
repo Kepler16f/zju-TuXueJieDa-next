@@ -2,6 +2,8 @@
 
 #include <dwmapi.h>
 #include <flutter_windows.h>
+#include <shellapi.h>
+#include <wchar.h>
 
 #include "resource.h"
 
@@ -16,7 +18,39 @@ namespace {
 #define DWMWA_USE_IMMERSIVE_DARK_MODE 20
 #endif
 
-constexpr const wchar_t kWindowClassName[] = L"FLUTTER_RUNNER_WIN32_WINDOW";
+/// Tooltip shown when hovering the tray icon. The source is compiled as
+/// UTF-8 (see /utf-8 in runner/CMakeLists.txt) so this stays readable.
+constexpr wchar_t kTrayTooltip[] = L"图学基础教程习题解答";
+
+/// Identifier for this app's tray icon within this window's tray slots.
+constexpr UINT kTrayIconId = 1;
+
+/// Command ids for the tray context menu.
+constexpr int kTrayCommandOpen = 1001;
+constexpr int kTrayCommandQuit = 1002;
+
+/// Message through which mouse events on the tray icon are delivered to the
+/// window. Uses a registered message so it cannot collide with any engine or
+/// framework message.
+UINT GetTrayCallbackMessage() {
+  static const UINT message =
+      RegisterWindowMessageW(L"TuxueJieDaNext.TrayCallback");
+  return message;
+}
+
+/// Message broadcast by Windows whenever the taskbar is (re)created; used to
+/// restore the tray icon after an Explorer restart.
+UINT GetTaskbarCreatedMessage() {
+  static const UINT message = RegisterWindowMessageW(L"TaskbarCreated");
+  return message;
+}
+
+/// Message posted by a second app instance to request activation; see
+/// |kActivateMessageName| in win32_window.h.
+UINT GetActivateMessage() {
+  static const UINT message = RegisterWindowMessageW(kActivateMessageName);
+  return message;
+}
 
 /// Registry key for app theme preference.
 ///
@@ -84,13 +118,143 @@ class WindowClassRegistrar {
   bool class_registered_ = false;
 };
 
+#pragma comment(lib, "advapi32.lib")
+
+namespace {
+
+// Registry location for persisted window bounds (per-user; survives updates).
+constexpr wchar_t kSettingsSubkey[] = L"Software\\TuxueJieDaNext";
+
+struct SavedWindowBounds {
+  LONG left = 0;
+  LONG top = 0;
+  LONG width = 0;
+  LONG height = 0;
+  bool maximized = false;
+  bool valid = false;
+};
+
+// Reads the last session's window bounds ("left,top,width,height" in screen
+// pixels) plus maximized flag. Returns invalid when nothing sensible is
+// stored (first launch, cleared registry, or corrupt values).
+SavedWindowBounds LoadSavedWindowBounds() {
+  SavedWindowBounds bounds;
+  HKEY key = nullptr;
+  if (RegOpenKeyExW(HKEY_CURRENT_USER, kSettingsSubkey, 0, KEY_READ, &key) !=
+      ERROR_SUCCESS) {
+    return bounds;
+  }
+  wchar_t buf[64] = {};
+  DWORD size = sizeof(buf);
+  DWORD type = 0;
+  if (RegQueryValueExW(key, L"WindowRect", nullptr, &type,
+                       reinterpret_cast<LPBYTE>(buf), &size) == ERROR_SUCCESS &&
+      type == REG_SZ) {
+    int v[4] = {0, 0, 0, 0};
+    if (swscanf_s(buf, L"%d,%d,%d,%d", &v[0], &v[1], &v[2], &v[3]) == 4 &&
+        v[2] >= 400 && v[3] >= 300 && v[0] > -32000 && v[1] > -32000) {
+      bounds.left = v[0];
+      bounds.top = v[1];
+      bounds.width = v[2];
+      bounds.height = v[3];
+      bounds.valid = true;
+    }
+  }
+  DWORD maximized = 0;
+  size = sizeof(maximized);
+  if (bounds.valid &&
+      RegQueryValueExW(key, L"WindowMaximized", nullptr, &type,
+                       reinterpret_cast<LPBYTE>(&maximized),
+                       &size) == ERROR_SUCCESS &&
+      type == REG_DWORD) {
+    bounds.maximized = maximized != 0;
+  }
+  RegCloseKey(key);
+  return bounds;
+}
+
+// Keeps the saved bounds fully on the nearest monitor's work area so a
+// monitor or DPI change between sessions can never hide the window.
+void ClampToWorkArea(SavedWindowBounds& bounds) {
+  RECT rect{bounds.left, bounds.top, bounds.left + bounds.width,
+            bounds.top + bounds.height};
+  HMONITOR monitor = MonitorFromRect(&rect, MONITOR_DEFAULTTONEAREST);
+  MONITORINFO info{sizeof(info)};
+  if (!GetMonitorInfo(monitor, &info)) {
+    return;
+  }
+  const RECT& work = info.rcWork;
+  LONG width = bounds.width;
+  LONG height = bounds.height;
+  if (width > work.right - work.left) {
+    width = work.right - work.left;
+  }
+  if (height > work.bottom - work.top) {
+    height = work.bottom - work.top;
+  }
+  LONG left = bounds.left;
+  LONG top = bounds.top;
+  if (left < work.left) {
+    left = work.left;
+  }
+  if (top < work.top) {
+    top = work.top;
+  }
+  if (left + width > work.right) {
+    left = work.right - width;
+  }
+  if (top + height > work.bottom) {
+    top = work.bottom - height;
+  }
+  bounds.left = left;
+  bounds.top = top;
+  bounds.width = width;
+  bounds.height = height;
+}
+
+// Persists the window bounds (screen pixels) and maximized flag. The rect is
+// only written while the window is in a normal (visible, not minimized,
+// not maximized) state so the stored bounds always describe a restored
+// window; the maximized flag is still updated in those states.
+void SaveWindowBounds(HWND hwnd) {
+  WINDOWPLACEMENT placement{sizeof(placement)};
+  if (!GetWindowPlacement(hwnd, &placement)) {
+    return;
+  }
+  const bool maximized = placement.showCmd == SW_SHOWMAXIMIZED;
+  HKEY key = nullptr;
+  if (RegCreateKeyExW(HKEY_CURRENT_USER, kSettingsSubkey, 0, nullptr, 0,
+                      KEY_WRITE, nullptr, &key, nullptr) != ERROR_SUCCESS) {
+    return;
+  }
+  if (!maximized && !IsIconic(hwnd)) {
+    RECT rect{};
+    if (GetWindowRect(hwnd, &rect)) {
+      wchar_t buf[64];
+      swprintf_s(buf, L"%d,%d,%d,%d", static_cast<int>(rect.left),
+                 static_cast<int>(rect.top),
+                 static_cast<int>(rect.right - rect.left),
+                 static_cast<int>(rect.bottom - rect.top));
+      RegSetValueExW(key, L"WindowRect", 0, REG_SZ,
+                     reinterpret_cast<const BYTE*>(buf),
+                     static_cast<DWORD>((wcslen(buf) + 1) * sizeof(wchar_t)));
+    }
+  }
+  DWORD flag = maximized ? 1 : 0;
+  RegSetValueExW(key, L"WindowMaximized", 0, REG_DWORD,
+                 reinterpret_cast<const BYTE*>(&flag), sizeof(flag));
+  RegCloseKey(key);
+}
+
+}  // namespace
+
 WindowClassRegistrar* WindowClassRegistrar::instance_ = nullptr;
 
 const wchar_t* WindowClassRegistrar::GetWindowClass() {
   if (!class_registered_) {
     WNDCLASS window_class{};
     window_class.hCursor = LoadCursor(nullptr, IDC_ARROW);
-    window_class.lpszClassName = kWindowClassName;
+    window_class.lpszClassName = Win32Window::kWindowClassName;
     window_class.style = CS_HREDRAW | CS_VREDRAW;
     window_class.cbClsExtra = 0;
     window_class.cbWndExtra = 0;
@@ -103,11 +267,11 @@ const wchar_t* WindowClassRegistrar::GetWindowClass() {
     RegisterClass(&window_class);
     class_registered_ = true;
   }
-  return kWindowClassName;
+  return Win32Window::kWindowClassName;
 }
 
 void WindowClassRegistrar::UnregisterWindowClass() {
-  UnregisterClass(kWindowClassName, nullptr);
+  UnregisterClass(Win32Window::kWindowClassName, nullptr);
   class_registered_ = false;
 }
 
@@ -134,10 +298,29 @@ bool Win32Window::Create(const std::wstring& title,
   UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
   double scale_factor = dpi / 96.0;
 
+  int pos_x = Scale(origin.x, scale_factor);
+  int pos_y = Scale(origin.y, scale_factor);
+  int win_width = Scale(size.width, scale_factor);
+  int win_height = Scale(size.height, scale_factor);
+
+  // Restore the previous session's window bounds when available so reopening
+  // the app keeps the user's preferred size and position. Saved values are
+  // physical pixels and already include the DPI scaling used when saved.
+  SavedWindowBounds saved = LoadSavedWindowBounds();
+  if (saved.valid) {
+    ClampToWorkArea(saved);
+    pos_x = saved.left;
+    pos_y = saved.top;
+    win_width = saved.width;
+    win_height = saved.height;
+    restore_maximized_ = saved.maximized;
+  } else {
+    restore_maximized_ = false;
+  }
+
   HWND window = CreateWindow(
       window_class, title.c_str(), WS_OVERLAPPEDWINDOW,
-      Scale(origin.x, scale_factor), Scale(origin.y, scale_factor),
-      Scale(size.width, scale_factor), Scale(size.height, scale_factor),
+      pos_x, pos_y, win_width, win_height,
       nullptr, nullptr, GetModuleHandle(nullptr), this);
 
   if (!window) {
@@ -150,7 +333,11 @@ bool Win32Window::Create(const std::wstring& title,
 }
 
 bool Win32Window::Show() {
-  return ShowWindow(window_handle_, SW_SHOWNORMAL);
+  // The first show honors the maximized flag restored from the previous
+  // session's window state; later calls show normally.
+  const bool maximized = restore_maximized_;
+  restore_maximized_ = false;
+  return ShowWindow(window_handle_, maximized ? SW_SHOWMAXIMIZED : SW_SHOWNORMAL);
 }
 
 // static
@@ -178,8 +365,72 @@ Win32Window::MessageHandler(HWND hwnd,
                             UINT const message,
                             WPARAM const wparam,
                             LPARAM const lparam) noexcept {
+  // Messages registered at runtime cannot be case labels; check them first.
+  if (message == GetTrayCallbackMessage()) {
+    const UINT mouse_message = LOWORD(lparam);
+    if (mouse_message == WM_LBUTTONUP) {
+      // Left click on the tray icon: show and foreground the main window.
+      ShowAndActivate();
+    } else if (mouse_message == WM_RBUTTONUP) {
+      ShowTrayContextMenu();
+    }
+    return 0;
+  }
+
+  if (message == GetTaskbarCreatedMessage()) {
+    // Explorer was restarted; re-create the tray icon if it was shown before.
+    if (tray_icon_added_) {
+      tray_icon_added_ = false;
+      EnsureTrayIcon();
+    }
+    return 0;
+  }
+
+  if (message == GetActivateMessage()) {
+    // A second instance requested activation. This can happen while the
+    // window is hidden in the tray, so restore it before foregrounding.
+    ShowAndActivate();
+    return 0;
+  }
+
   switch (message) {
+    case WM_CLOSE:
+      if (close_to_tray_ && window_handle_) {
+        // Hide to the tray instead of quitting; the Flutter engine keeps
+        // running while the window is hidden.
+        HideToTray();
+        return 0;
+      }
+      // Otherwise fall through to DefWindowProc, which destroys the window
+      // and eventually triggers WM_DESTROY.
+      break;
+
+    case WM_COMMAND: {
+      // Commands from the tray context menu.
+      const UINT command_id = LOWORD(wparam);
+      if (command_id == kTrayCommandOpen) {
+        ShowAndActivate();
+        return 0;
+      }
+      if (command_id == kTrayCommandQuit) {
+        QuitFromTray();
+        return 0;
+      }
+      break;
+    }
+
+    case WM_ENDSESSION:
+      // System shutdown or logoff: clean up the tray icon and quit for real.
+      if (wparam) {
+        RemoveTrayIcon();
+        DestroyWindow(hwnd);
+        return 0;
+      }
+      break;
+
     case WM_DESTROY:
+      SaveWindowBounds(hwnd);
+      RemoveTrayIcon();
       window_handle_ = nullptr;
       Destroy();
       if (quit_on_close_) {
@@ -261,6 +512,101 @@ HWND Win32Window::GetHandle() {
 
 void Win32Window::SetQuitOnClose(bool quit_on_close) {
   quit_on_close_ = quit_on_close;
+}
+
+void Win32Window::SetCloseToTray(bool enabled) {
+  close_to_tray_ = enabled;
+  if (!enabled) {
+    RemoveTrayIcon();
+    // If the window is currently parked in the tray while closing is changed
+    // to really quit, bring it back so the user is not left with a hidden app.
+    if (window_handle_ && !IsWindowVisible(window_handle_)) {
+      ShowAndActivate();
+    }
+  }
+}
+
+void Win32Window::ShowAndActivate() {
+  if (!window_handle_) {
+    return;
+  }
+  // If hidden to the tray, make the window visible again first.
+  if (!IsWindowVisible(window_handle_)) {
+    ShowWindow(window_handle_, SW_SHOW);
+  }
+  ShowWindow(window_handle_, SW_RESTORE);
+  SetForegroundWindow(window_handle_);
+}
+
+void Win32Window::HideToTray() {
+  if (!window_handle_) {
+    return;
+  }
+  EnsureTrayIcon();
+  ShowWindow(window_handle_, SW_HIDE);
+}
+
+void Win32Window::EnsureTrayIcon() {
+  if (tray_icon_added_ || !window_handle_) {
+    return;
+  }
+  NOTIFYICONDATAW nid{};
+  nid.cbSize = sizeof(nid);
+  nid.hWnd = window_handle_;
+  nid.uID = kTrayIconId;
+  nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
+  nid.uCallbackMessage = GetTrayCallbackMessage();
+  nid.hIcon =
+      LoadIconW(GetModuleHandle(nullptr), MAKEINTRESOURCEW(IDI_APP_ICON));
+  if (!nid.hIcon) {
+    nid.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
+  }
+  wcsncpy_s(nid.szTip, kTrayTooltip, _TRUNCATE);
+  tray_icon_added_ = Shell_NotifyIconW(NIM_ADD, &nid) != 0;
+}
+
+void Win32Window::RemoveTrayIcon() {
+  if (!tray_icon_added_ || !window_handle_) {
+    return;
+  }
+  NOTIFYICONDATAW nid{};
+  nid.cbSize = sizeof(nid);
+  nid.hWnd = window_handle_;
+  nid.uID = kTrayIconId;
+  Shell_NotifyIconW(NIM_DELETE, &nid);
+  tray_icon_added_ = false;
+}
+
+void Win32Window::ShowTrayContextMenu() {
+  if (!window_handle_) {
+    return;
+  }
+  POINT cursor_pos{};
+  if (!GetCursorPos(&cursor_pos)) {
+    return;
+  }
+  HMENU menu = CreatePopupMenu();
+  if (!menu) {
+    return;
+  }
+  AppendMenuW(menu, MF_STRING, kTrayCommandOpen, L"打开主窗口");
+  AppendMenuW(menu, MF_STRING, kTrayCommandQuit, L"退出");
+  // TrackPopupMenu requires the owner window to be foreground, otherwise the
+  // menu will not dismiss when clicking elsewhere.
+  SetForegroundWindow(window_handle_);
+  TrackPopupMenu(menu, TPM_RIGHTBUTTON, cursor_pos.x, cursor_pos.y, 0,
+                 window_handle_, nullptr);
+  PostMessageW(window_handle_, WM_NULL, 0, 0);
+  DestroyMenu(menu);
+}
+
+void Win32Window::QuitFromTray() {
+  RemoveTrayIcon();
+  // Really quit: destroying the window triggers WM_DESTROY, which posts the
+  // quit message when quit_on_close_ is set (main.cpp sets it).
+  if (window_handle_) {
+    DestroyWindow(window_handle_);
+  }
 }
 
 bool Win32Window::OnCreate() {

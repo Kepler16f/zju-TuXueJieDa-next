@@ -1,7 +1,7 @@
 name: tuxuejieda_next
 description: "《图学基础教程习题解答》跨平台现代重构版（含 177 道激活题、分步图解与视频动画）"
 publish_to: 'none'
-version: 0.0.1+1
+version: 0.1.2+4
 
 environment:
   sdk: ^3.13.7
@@ -51,6 +51,12 @@ flutter:
     - assets/answers/
     - assets/steps/
     - assets/videos/
+  fonts:
+    - family: AppSansCJK
+      fonts:
+        - asset: assets/fonts/AppSansCJK-Regular.otf
+        - asset: assets/fonts/AppSansCJK-Bold.otf
+          weight: 700
 
   # To add assets to your application, add an assets section, like this:
   # assets:

@@ -210,6 +210,12 @@ class UpdateService {
     return triggerDownloadedUpdateInstall(filePath, os: target.os);
   }
 
+  /// Releases the underlying Dio client and its socket resources.
+  ///
+  /// Call this when the widget that owns the service instance is disposed;
+  /// the service must not be used for further network requests afterwards.
+  void close() => _dio.close(force: true);
+
   static ReleaseInfo _parseRelease(Map<String, dynamic> json) {
     final tag = (json['tag_name'] as String? ?? '').trim();
     final version = normalizeVersion(tag.isNotEmpty ? tag : (json['name'] as String? ?? '0.0.0'));
@@ -260,6 +266,45 @@ class UpdateService {
     return 0;
   }
 
+  /// Word-boundary token matcher for lower-cased asset names: any character
+  /// outside `[a-z0-9]` (hyphen, underscore, dot, CJK, whitespace, ...) acts
+  /// as a separator, so `-x64-` matches while `max64` / `x64bit` never do.
+  /// Compound tokens such as `x86_64`, `arm64-v8a` and `armeabi-v7a` must be
+  /// checked before their shorter prefixes (`x86`, `arm64`, `armeabi`) so a
+  /// x86_64 package is never misread as a pure x86 build.
+  static final Map<String, RegExp> _wordTokenPatterns = {};
+
+  static bool _hasWordToken(String lowerName, String token) {
+    final pattern = _wordTokenPatterns.putIfAbsent(
+      token,
+      () => RegExp('(?<![a-z0-9])${RegExp.escape(token)}(?![a-z0-9])'),
+    );
+    return pattern.hasMatch(lowerName);
+  }
+
+  /// arm64 family; `aarch64` is an alias (mostly seen on Linux).
+  static bool _hasArm64Token(String lowerName) =>
+      _hasWordToken(lowerName, 'arm64') || _hasWordToken(lowerName, 'aarch64');
+
+  static bool _hasArm32Token(String lowerName) =>
+      _hasWordToken(lowerName, 'arm32');
+
+  /// x64 family; `x86_64` / `amd64` / `win64` are aliases.
+  static bool _hasX64Token(String lowerName) =>
+      _hasWordToken(lowerName, 'x64') ||
+      _hasWordToken(lowerName, 'x86_64') ||
+      _hasWordToken(lowerName, 'amd64') ||
+      _hasWordToken(lowerName, 'win64');
+
+  /// Pure 32-bit x86 family. Only meaningful when [_hasX64Token] is false,
+  /// because `x86_64` also contains the `x86` letters.
+  static bool _hasX86Token(String lowerName) =>
+      _hasWordToken(lowerName, 'x86') ||
+      _hasWordToken(lowerName, 'win32') ||
+      _hasWordToken(lowerName, 'i386') ||
+      _hasWordToken(lowerName, 'i686') ||
+      _hasWordToken(lowerName, 'ia32');
+
   @visibleForTesting
   static ReleaseAsset? matchAssetForPlatform(
     List<ReleaseAsset> assets,
@@ -269,78 +314,150 @@ class UpdateService {
     final os = target.os.toLowerCase();
     final arch = target.arch.toLowerCase();
 
-    int score(ReleaseAsset asset) {
-      final name = asset.name.toLowerCase();
-      var s = 0;
-
-      if (os == 'windows') {
-        if (!(name.endsWith('.exe') ||
-            name.endsWith('.msix') ||
-            name.endsWith('.msi') ||
-            name.endsWith('.zip'))) {
-          return -1;
-        }
-        if (name.contains('windows') || name.contains('win')) s += 20;
-        if (name.contains(arch)) s += 30;
-        if (arch == 'arm64' && (name.contains('x64') || name.contains('x86'))) return -1;
-        if (arch == 'x64' && (name.contains('arm64') || name.contains('arm32'))) return -1;
-        if (name.endsWith('.exe') || name.endsWith('.msi') || name.endsWith('.msix')) s += 10;
-        if (name.endsWith('.zip')) s += 5;
-        return s;
-      }
-
-      if (os == 'android') {
-        if (!name.endsWith('.apk')) return -1;
-        s += 20;
-        if (name.contains(arch)) {
-          s += 30;
-        } else if (arch == 'arm64' && name.contains('arm64-v8a')) {
-          s += 30;
-        } else if (arch == 'armeabi' && name.contains('armeabi-v7a')) {
-          s += 30;
-        } else if (name.contains('universal')) {
-          s += 15;
-        } else if (name.contains('arm64') ||
-            name.contains('armeabi') ||
-            name.contains('x86_64') ||
-            name.contains('x86')) {
-          // Different ABI apk.
-          if (!name.contains(arch)) return -1;
-        }
-        return s;
-      }
-
-      if (os == 'linux') {
-        if (!(name.endsWith('.appimage') ||
-            name.endsWith('.deb') ||
-            name.endsWith('.tar.gz') ||
-            name.endsWith('.zip'))) {
-          return -1;
-        }
-        if (name.contains('linux')) s += 20;
-        if (name.contains(arch) || (arch == 'arm64' && name.contains('aarch64'))) {
-          s += 30;
-        } else if (name.contains('x64') || name.contains('arm64') || name.contains('aarch64')) {
-          return -1;
-        }
-        if (name.endsWith('.appimage')) s += 10;
-        if (name.endsWith('.deb')) s += 8;
-        if (name.endsWith('.tar.gz')) s += 5;
-        return s;
-      }
-
-      return -1;
-    }
-
     ReleaseAsset? best;
     var bestScore = -1;
     for (final a in assets) {
-      final sc = score(a);
+      final sc = _scoreAsset(a.name.toLowerCase(), os, arch);
       if (sc > bestScore) {
         bestScore = sc;
         best = a;
       }
     }
     return best;
+  }
+
+  /// Scoring rules (shared shape across platforms):
+  /// - wrong extension: -1;
+  /// - OS keyword (Windows/Linux) or APK base (Android): +20;
+  /// - architecture token matching the target family: +30;
+  /// - conflicting architecture token (mutually exclusive family): -1;
+  /// - no architecture token at all: 0 (neutral fallback);
+  /// - Android `universal`: +15 (below the exact-ABI +30);
+  /// - installer format bonus on Windows / Linux.
+  static int _scoreAsset(String name, String os, String arch) {
+    if (os == 'windows') {
+      if (!(name.endsWith('.exe') ||
+          name.endsWith('.msix') ||
+          name.endsWith('.msi') ||
+          name.endsWith('.zip'))) {
+        return -1;
+      }
+      var s = 0;
+      // x64 family must be tested before x86: `x86_64` also contains `x86`.
+      final x64 = _hasX64Token(name);
+      final x86 = !x64 && _hasX86Token(name);
+      final arm64 = _hasArm64Token(name);
+      final arm32 = _hasArm32Token(name);
+      if (_hasWordToken(name, 'windows') ||
+          _hasWordToken(name, 'win') ||
+          _hasWordToken(name, 'win64') ||
+          _hasWordToken(name, 'win32')) {
+        s += 20;
+      }
+      if (arch == 'arm64') {
+        if (arm64) {
+          s += 30;
+        } else if (x64 || x86) {
+          // Contains an x64/x86 token and no arm64 token: not an arm64 build.
+          return -1;
+        }
+      } else if (arch == 'x64') {
+        if (x64) {
+          s += 30;
+        } else if (arm64 || arm32 || x86) {
+          // ARM builds and pure x86 builds cannot serve an x64 target.
+          return -1;
+        }
+      } else if (arch == 'x86') {
+        if (x86) {
+          s += 30;
+        } else if (x64 || arm64) {
+          return -1;
+        }
+      } else if (_hasWordToken(name, arch)) {
+        s += 30;
+      }
+      if (name.endsWith('.exe') ||
+          name.endsWith('.msi') ||
+          name.endsWith('.msix')) {
+        s += 10;
+      }
+      if (name.endsWith('.zip')) {
+        s += 5;
+      }
+      return s;
+    }
+
+    if (os == 'android') {
+      if (!name.endsWith('.apk')) return -1;
+      var s = 20;
+      final abiArm64 =
+          _hasWordToken(name, 'arm64-v8a') || _hasWordToken(name, 'arm64');
+      final abiArmeabi =
+          _hasWordToken(name, 'armeabi-v7a') || _hasWordToken(name, 'armeabi');
+      final abiX64 = _hasWordToken(name, 'x86_64') || _hasWordToken(name, 'x64');
+      final abiX86 = !abiX64 && _hasWordToken(name, 'x86');
+      final abiUniversal = _hasWordToken(name, 'universal');
+      final isTargetAbi = switch (arch) {
+        'arm64' => abiArm64,
+        'armeabi' => abiArmeabi,
+        'x64' => abiX64,
+        'x86' => abiX86,
+        _ => false,
+      };
+      if (isTargetAbi) {
+        s += 30;
+      } else if (abiUniversal) {
+        // Universal APKs install on every ABI but rank below exact ABI builds.
+        s += 15;
+      } else if (abiArm64 || abiArmeabi || abiX64 || abiX86) {
+        // APK built for a different ABI.
+        return -1;
+      }
+      return s;
+    }
+
+    if (os == 'linux') {
+      if (!(name.endsWith('.appimage') ||
+          name.endsWith('.deb') ||
+          name.endsWith('.tar.gz') ||
+          name.endsWith('.zip'))) {
+        return -1;
+      }
+      var s = 0;
+      if (_hasWordToken(name, 'linux')) s += 20;
+      final x64 = _hasX64Token(name);
+      final x86 = !x64 && _hasX86Token(name);
+      final arm64 = _hasArm64Token(name);
+      if (arch == 'arm64') {
+        // aarch64 is equivalent to arm64.
+        if (arm64) {
+          s += 30;
+        } else if (x64 || x86) {
+          return -1;
+        }
+      } else if (arch == 'x64') {
+        if (x64) {
+          s += 30;
+        } else if (arm64 || x86) {
+          // x64 and arm64 are mutually exclusive.
+          return -1;
+        }
+      } else if (arch == 'x86') {
+        if (x86) {
+          s += 30;
+        } else if (x64 || arm64) {
+          return -1;
+        }
+      } else if (_hasWordToken(name, arch)) {
+        s += 30;
+      }
+      if (name.endsWith('.appimage')) s += 10;
+      if (name.endsWith('.deb')) s += 8;
+      if (name.endsWith('.tar.gz')) s += 5;
+      return s;
+    }
+
+    return -1;
   }
 }

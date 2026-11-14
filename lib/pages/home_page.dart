@@ -1,15 +1,15 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../data/curriculum_repository.dart';
 import '../models/curriculum.dart';
-import '../services/update_service.dart';
-import '../widgets/update_dialog.dart';
 import 'problem_workspace_page.dart';
 
 enum ProblemFilter { all, withVideo, multiStep, bookmarked, unfinished }
 
-/// Main curriculum browser with chapter navigation, search, study progress,
-/// and cross-platform update check entry point.
+/// Main curriculum browser with chapter navigation, search and study progress.
+/// Embedded as the 题库 destination inside the responsive AppShell.
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.repo});
 
@@ -21,22 +21,9 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final TextEditingController _searchCtrl = TextEditingController();
-  final UpdateService _updateService = UpdateService();
 
   String? _selectedChapterId;
   ProblemFilter _filter = ProblemFilter.all;
-  String _appVersion = '0.0.1';
-
-  @override
-  void initState() {
-    super.initState();
-    _loadVersion();
-  }
-
-  Future<void> _loadVersion() async {
-    final v = await _updateService.getCurrentVersion();
-    if (mounted) setState(() => _appVersion = v);
-  }
 
   @override
   void dispose() {
@@ -95,7 +82,7 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   CircularProgressIndicator(),
                   SizedBox(height: 12),
-                  Text('正在加载 177 道图学习题与数字资产...'),
+                  Text('正在加载图学习题与数字资产...'),
                 ],
               ),
             ),
@@ -137,6 +124,22 @@ class _HomePageState extends State<HomePage> {
         return Scaffold(
           appBar: AppBar(
             titleSpacing: 16,
+            actions: [
+              IconButton(
+                tooltip: repo.problemViewStyle == 'card'
+                    ? '切换为列表视图'
+                    : '切换为卡片视图',
+                icon: Icon(
+                  repo.problemViewStyle == 'card'
+                      ? Icons.view_list_rounded
+                      : Icons.grid_view_rounded,
+                ),
+                onPressed: () => repo.setProblemViewStyle(
+                  repo.problemViewStyle == 'card' ? 'list' : 'card',
+                ),
+              ),
+              const SizedBox(width: 4),
+            ],
             title: Row(
               children: [
                 Container(
@@ -162,7 +165,7 @@ class _HomePageState extends State<HomePage> {
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
-                        '浙江大学工程及计算机图学教研室 · Next',
+                        '非官方重制 · 原课件数字化重构',
                         style: TextStyle(fontSize: 11, fontWeight: FontWeight.w400),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -171,24 +174,6 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
             ),
-            actions: [
-              Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: TextButton.icon(
-                  onPressed: () => UpdateDialog.show(context, service: _updateService),
-                  icon: const Icon(Icons.system_update_alt_rounded, size: 18),
-                  label: Text('v$_appVersion · 检查更新'),
-                ),
-              ),
-              IconButton(
-                tooltip: repo.darkMode ? '切换浅色外观' : '切换深色外观',
-                icon: Icon(
-                  repo.darkMode ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-                ),
-                onPressed: () => repo.setDarkMode(!repo.darkMode),
-              ),
-              const SizedBox(width: 6),
-            ],
           ),
           body: CustomScrollView(
             slivers: [
@@ -377,9 +362,42 @@ class _HomePageState extends State<HomePage> {
                     child: Text('未找到匹配该条件的习题，请尝试更改关键词或筛选器。'),
                   ),
                 )
+              else if (repo.problemViewStyle == 'list')
+                SliverPadding(
+                  // Leave room for the shell's bottom NavigationBar under
+                  // edge-to-edge (padding.bottom already carries the allowance).
+                  padding: EdgeInsets.fromLTRB(
+                    16, 4, 16,
+                    math.max(24.0, MediaQuery.paddingOf(context).bottom),
+                  ),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final problem = filtered[index];
+                        final ch = curriculum.chapterById(problem.chapterId);
+                        return _ProblemRow(
+                          problem: problem,
+                          chapterTitle: ch.title,
+                          done: repo.isCompleted(problem.id),
+                          bookmarked: repo.isBookmarked(problem.id),
+                          hasNote: repo.noteFor(problem.id).isNotEmpty,
+                          onTap: () => _openProblem(curriculum, problem),
+                          onToggleDone: () => repo.toggleCompleted(problem.id),
+                          onToggleBookmark: () => repo.toggleBookmarked(problem.id),
+                        );
+                      },
+                      childCount: filtered.length,
+                    ),
+                  ),
+                )
               else
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                  // Leave room for the shell's bottom NavigationBar under
+                  // edge-to-edge (padding.bottom already carries the allowance).
+                  padding: EdgeInsets.fromLTRB(
+                    16, 4, 16,
+                    math.max(24.0, MediaQuery.paddingOf(context).bottom),
+                  ),
                   sliver: SliverGrid(
                     gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                       maxCrossAxisExtent: 390,
@@ -675,6 +693,107 @@ class _ProblemCard extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 列表视图的紧凑题目行：与卡片同数据、同操作，单行展示。
+class _ProblemRow extends StatelessWidget {
+  const _ProblemRow({
+    required this.problem,
+    required this.chapterTitle,
+    required this.done,
+    required this.bookmarked,
+    required this.hasNote,
+    required this.onTap,
+    required this.onToggleDone,
+    required this.onToggleBookmark,
+  });
+
+  final Problem problem;
+  final String chapterTitle;
+  final bool done;
+  final bool bookmarked;
+  final bool hasNote;
+  final VoidCallback onTap;
+  final VoidCallback onToggleDone;
+  final VoidCallback onToggleBookmark;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.symmetric(vertical: 3),
+      color: theme.colorScheme.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: theme.colorScheme.outlineVariant),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+          child: Row(
+            children: [
+              Icon(
+                done
+                    ? Icons.check_circle_rounded
+                    : Icons.check_circle_outline_rounded,
+                size: 17,
+                color: done
+                    ? Colors.green.shade600
+                    : theme.colorScheme.outline,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                problem.displayLabel,
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  chapterTitle,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (hasNote)
+                Padding(
+                  padding: const EdgeInsets.only(right: 2),
+                  child: Icon(
+                    Icons.sticky_note_2_outlined,
+                    size: 15,
+                    color: Colors.indigo.shade400,
+                  ),
+                ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                iconSize: 18,
+                tooltip: bookmarked ? '取消收藏' : '收藏本题',
+                icon: Icon(
+                  bookmarked ? Icons.star_rounded : Icons.star_border_rounded,
+                  color: bookmarked ? Colors.amber.shade700 : null,
+                ),
+                onPressed: onToggleBookmark,
+              ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                iconSize: 18,
+                tooltip: done ? '标记为未完成' : '标记为已完成',
+                icon: Icon(
+                  done ? Icons.check_circle_rounded : Icons.check_circle_outline_rounded,
+                  color: done ? Colors.green.shade600 : null,
+                ),
+                onPressed: onToggleDone,
               ),
             ],
           ),

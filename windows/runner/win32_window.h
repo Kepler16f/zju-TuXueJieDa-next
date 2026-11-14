@@ -7,11 +7,27 @@
 #include <memory>
 #include <string>
 
+// Name of the OS mutex used to enforce single-instance behavior. Scoped to
+// the logon session (Local\) so different users can run the app concurrently.
+inline constexpr wchar_t kSingleInstanceMutexName[] =
+    L"Local\\TuxueJieDaNext.SingleInstance";
+
+// Name of the message registered by both the first and any subsequent app
+// instance so the message id resolves to the same value within the session.
+// A second launch posts it to ask the running instance to show and foreground
+// itself (this also restores a window hidden to the tray).
+inline constexpr wchar_t kActivateMessageName[] = L"TuxueJieDaNext.Activate";
+
 // A class abstraction for a high DPI-aware Win32 Window. Intended to be
 // inherited from by classes that wish to specialize with custom
 // rendering and input handling
 class Win32Window {
  public:
+  // Name of the window class registered for all Win32Window instances.
+  // Exposed so the single-instance logic can find an already-running
+  // instance of this app.
+  static constexpr wchar_t kWindowClassName[] = L"FLUTTER_RUNNER_WIN32_WINDOW";
+
   struct Point {
     unsigned int x;
     unsigned int y;
@@ -55,6 +71,16 @@ class Win32Window {
   // Return a RECT representing the bounds of the current client area.
   RECT GetClientArea();
 
+  // Controls whether the window close button hides the window to a
+  // notification-area tray icon (true) or really quits the app (false).
+  // Enabled by default until Dart reports the user's actual preference via
+  // the window MethodChannel.
+  void SetCloseToTray(bool enabled);
+
+  // Shows the window, restores it if minimized, and brings it to the
+  // foreground. Used by the tray icon and by single-instance activation.
+  void ShowAndActivate();
+
  protected:
   // Processes and route salient window messages for mouse handling,
   // size change and DPI. Delegates handling of these to member overloads that
@@ -90,13 +116,41 @@ class Win32Window {
   // Update the window frame's theme to match the system theme.
   static void UpdateTheme(HWND const window);
 
+  // Hides the window to the tray, creating the tray icon first if needed.
+  // The Flutter engine keeps running while the window is hidden.
+  void HideToTray();
+
+  // Adds the notification-area icon if it is not present yet.
+  void EnsureTrayIcon();
+
+  // Removes the notification-area icon if it is present.
+  void RemoveTrayIcon();
+
+  // Shows the tray context menu (open main window / quit).
+  void ShowTrayContextMenu();
+
+  // Removes the tray icon and really quits the application.
+  void QuitFromTray();
+
   bool quit_on_close_ = false;
+
+  // Whether the close button hides the window to the tray instead of
+  // quitting. Native default is true; Dart syncs the real preference on
+  // startup via the window MethodChannel.
+  bool close_to_tray_ = true;
+
+  // Whether the tray icon is currently displayed.
+  bool tray_icon_added_ = false;
 
   // window handle for top level window.
   HWND window_handle_ = nullptr;
 
   // window handle for hosted content.
   HWND child_content_ = nullptr;
+
+  // Whether the first Show() after Create() should display the window
+  // maximized, restored from the previous session's saved window state.
+  bool restore_maximized_ = false;
 };
 
 #endif  // RUNNER_WIN32_WINDOW_H_

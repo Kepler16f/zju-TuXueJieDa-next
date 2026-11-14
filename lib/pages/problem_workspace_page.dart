@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../data/curriculum_repository.dart';
 import '../models/curriculum.dart';
 import '../widgets/problem_video_player.dart';
+import '../widgets/sticky_note_card.dart';
 import '../widgets/zoomable_diagram_canvas.dart';
 
 enum WorkspaceTab { subject, answer, jieti, video }
@@ -42,6 +43,18 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
   bool _autoPlayingSteps = false;
   Timer? _autoPlayTimer;
 
+  /// Horizontal scroll controller for the toolbar tab segments. It only
+  /// becomes active when the window is too narrow to show every segment
+  /// without squeezing the labels onto two lines.
+  final ScrollController _toolbarTabsController = ScrollController();
+
+  /// Guarded tab view: the 解题 tab stays reachable only when the problem
+  /// carries more than 3 steps (its segment is hidden otherwise).
+  WorkspaceTab get _effectiveTab =>
+      (_tab == WorkspaceTab.jieti && _problem.steps.length <= 3)
+          ? WorkspaceTab.answer
+          : _tab;
+
   @override
   void initState() {
     super.initState();
@@ -51,6 +64,7 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
   @override
   void dispose() {
     _autoPlayTimer?.cancel();
+    _toolbarTabsController.dispose();
     super.dispose();
   }
 
@@ -61,12 +75,8 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
       _chapterProblems = widget.curriculum.problemsInChapter(p.chapterId);
       _stepIdx = 0;
       _peekingCompare = false;
-      // Default to stepped/tabbed breakdown if multi-step or tabbed; otherwise answer view.
-      _tab = p.steps.isNotEmpty
-          ? (p.hasMultiStep || p.jietiMode == JietiMode.tabbed
-              ? WorkspaceTab.jieti
-              : WorkspaceTab.answer)
-          : WorkspaceTab.answer;
+      // Keep the 解题 tab only for problems with more than 3 steps.
+      _tab = p.steps.length > 3 ? WorkspaceTab.jieti : WorkspaceTab.answer;
     });
     if (initial) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -99,7 +109,7 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
       _stopAutoPlay();
       return;
     }
-    if (_problem.steps.length <= 1) return;
+    if (_problem.steps.length <= 3) return;
     setState(() {
       _tab = WorkspaceTab.jieti;
       _autoPlayingSteps = true;
@@ -151,15 +161,15 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
         return CallbackShortcuts(
           bindings: {
             const SingleActivator(LogicalKeyboardKey.arrowLeft): () {
-              if (_tab == WorkspaceTab.jieti) _stepDelta(-1);
+              if (_effectiveTab == WorkspaceTab.jieti) _stepDelta(-1);
             },
             const SingleActivator(LogicalKeyboardKey.arrowRight): () {
-              if (_tab == WorkspaceTab.jieti) _stepDelta(1);
+              if (_effectiveTab == WorkspaceTab.jieti) _stepDelta(1);
             },
             const SingleActivator(LogicalKeyboardKey.pageUp): () => _navigateProblemDelta(-1),
             const SingleActivator(LogicalKeyboardKey.pageDown): () => _navigateProblemDelta(1),
             const SingleActivator(LogicalKeyboardKey.space): () {
-              if (_tab != WorkspaceTab.video) {
+              if (_effectiveTab != WorkspaceTab.video) {
                 setState(() => _peekingCompare = !_peekingCompare);
               }
             },
@@ -169,7 +179,11 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final isDesktop = constraints.maxWidth >= 960;
-                final isTablet = constraints.maxWidth >= 680;
+                // Below ~400 px five 48 px AppBar action buttons would leave
+                // the title row less than its own 本章题单 menu button wide
+                // (RenderFlex overflow); 上一题/下一题 relocate into the
+                // toolbar row instead.
+                final isCompact = constraints.maxWidth < 400;
 
                 return Scaffold(
                   key: _scaffoldKey,
@@ -187,6 +201,47 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
                           ),
                         )
                       : null,
+                  endDrawer: !isDesktop
+                      ? Drawer(
+                          child: SafeArea(
+                            bottom: false,
+                            child: Column(
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(16, 10, 8, 6),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          '题目详情与便签',
+                                          style: theme.textTheme.titleMedium
+                                              ?.copyWith(fontWeight: FontWeight.w700),
+                                        ),
+                                      ),
+                                      IconButton(
+                                        tooltip: '收起详情面板',
+                                        icon: const Icon(Icons.close_rounded),
+                                        onPressed: () => Navigator.of(context).pop(),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Expanded(
+                                  child: _ProblemDetailPanel(
+                                    problem: _problem,
+                                    activeStep: (_effectiveTab == WorkspaceTab.jieti &&
+                                            _stepIdx < _problem.steps.length)
+                                        ? _problem.steps[_stepIdx]
+                                        : null,
+                                    repo: widget.repo,
+                                    onCopy: _copyText,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      : null,
                   appBar: AppBar(
                     titleSpacing: 8,
                     leading: IconButton(
@@ -199,7 +254,7 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
                         if (!isDesktop)
                           IconButton(
                             tooltip: '本章题单',
-                            icon: const Icon(Icons.list_alt_rounded),
+                            icon: const Icon(Icons.menu_rounded),
                             onPressed: () => _scaffoldKey.currentState?.openDrawer(),
                           ),
                         Flexible(
@@ -225,16 +280,22 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
                       ],
                     ),
                     actions: [
-                      IconButton(
-                        tooltip: '上一题 (PageUp)',
-                        icon: const Icon(Icons.skip_previous_rounded),
-                        onPressed: hasPrev ? () => _navigateProblemDelta(-1) : null,
-                      ),
-                      IconButton(
-                        tooltip: '下一题 (PageDown)',
-                        icon: const Icon(Icons.skip_next_rounded),
-                        onPressed: hasNext ? () => _navigateProblemDelta(1) : null,
-                      ),
+                      // 上一题/下一题 are dropped here on very narrow screens
+                      // and reappear next to the compare button in the toolbar
+                      // (see _buildToolbar); chapter paging also remains
+                      // available via the 本章题单 drawer and PageUp/PageDown.
+                      if (!isCompact) ...[
+                        IconButton(
+                          tooltip: '上一题 (PageUp)',
+                          icon: const Icon(Icons.skip_previous_rounded),
+                          onPressed: hasPrev ? () => _navigateProblemDelta(-1) : null,
+                        ),
+                        IconButton(
+                          tooltip: '下一题 (PageDown)',
+                          icon: const Icon(Icons.skip_next_rounded),
+                          onPressed: hasNext ? () => _navigateProblemDelta(1) : null,
+                        ),
+                      ],
                       IconButton(
                         tooltip: bookmarked ? '取消收藏' : '收藏',
                         icon: Icon(
@@ -252,21 +313,34 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
                         onPressed: () => widget.repo.toggleCompleted(_problem.id),
                       ),
                       if (isDesktop) ...[
+                        // NOTE: Icons.left_panel_close/open_rounded and
+                        // right_panel_close/open_rounded are not yet shipped in
+                        // this Flutter SDK's Icons; view_sidebar / chrome_reader_mode
+                        // (filled = visible, outlined = hidden) are the closest
+                        // available stand-ins.
                         IconButton(
-                          tooltip: _showNavSidebar ? '隐藏左侧题单' : '显示左侧题单',
-                          icon: const Icon(Icons.view_sidebar_outlined),
+                          tooltip: _showNavSidebar ? '收起左侧题单栏' : '显示左侧题单栏',
+                          icon: Icon(
+                            _showNavSidebar
+                                ? Icons.view_sidebar_rounded
+                                : Icons.view_sidebar_outlined,
+                          ),
                           onPressed: () => setState(() => _showNavSidebar = !_showNavSidebar),
                         ),
                         IconButton(
-                          tooltip: _showDetailSidebar ? '隐藏右侧题干与笔记' : '显示右侧题干与笔记',
-                          icon: const Icon(Icons.chrome_reader_mode_outlined),
+                          tooltip: _showDetailSidebar ? '收起右侧详情栏' : '显示右侧详情栏',
+                          icon: Icon(
+                            _showDetailSidebar
+                                ? Icons.chrome_reader_mode_rounded
+                                : Icons.chrome_reader_mode_outlined,
+                          ),
                           onPressed: () => setState(() => _showDetailSidebar = !_showDetailSidebar),
                         ),
                       ] else
                         IconButton(
-                          tooltip: '查看文字要求与步骤说明',
-                          icon: const Icon(Icons.description_outlined),
-                          onPressed: () => _showMobileInfoSheet(context),
+                          tooltip: '题目详情与便签',
+                          icon: const Icon(Icons.description_rounded),
+                          onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
                         ),
                       const SizedBox(width: 4),
                     ],
@@ -289,10 +363,16 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
                       Expanded(
                         child: Column(
                           children: [
-                            _buildToolbar(theme, isTablet),
+                            _buildToolbar(
+                              theme,
+                              showNavArrows: isCompact,
+                              hasPrev: hasPrev,
+                              hasNext: hasNext,
+                            ),
                             const Divider(height: 1),
                             Expanded(child: _buildMainStage()),
-                            if (_tab == WorkspaceTab.jieti && _problem.steps.isNotEmpty)
+                            if (_effectiveTab == WorkspaceTab.jieti &&
+                                _problem.steps.length > 3)
                               _buildJietiControls(theme),
                           ],
                         ),
@@ -303,10 +383,11 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
                           width: 300,
                           child: _ProblemDetailPanel(
                             problem: _problem,
-                            activeStep: (_tab == WorkspaceTab.jieti &&
+                            activeStep: (_effectiveTab == WorkspaceTab.jieti &&
                                     _stepIdx < _problem.steps.length)
                                 ? _problem.steps[_stepIdx]
                                 : null,
+                            repo: widget.repo,
                             onCopy: _copyText,
                           ),
                         ),
@@ -322,19 +403,28 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
     );
   }
 
-  Widget _buildToolbar(ThemeData theme, bool isTablet) {
+  Widget _buildToolbar(
+    ThemeData theme, {
+    required bool showNavArrows,
+    required bool hasPrev,
+    required bool hasNext,
+  }) {
+    // maxLines:1/softWrap:false keeps every segment label on a single line;
+    // combined with the horizontal SingleChildScrollView below this guarantees
+    // one-line labels from 320 px phones to ultra-wide desktop windows (a
+    // squeezed SegmentedButton used to wrap 解题(9) / 动画视频 onto two lines).
     final segments = <ButtonSegment<WorkspaceTab>>[
       const ButtonSegment(
         value: WorkspaceTab.subject,
         icon: Icon(Icons.image_outlined, size: 17),
-        label: Text('原题'),
+        label: Text('原题', maxLines: 1, softWrap: false),
       ),
       const ButtonSegment(
         value: WorkspaceTab.answer,
         icon: Icon(Icons.verified_outlined, size: 17),
-        label: Text('答案'),
+        label: Text('答案', maxLines: 1, softWrap: false),
       ),
-      if (_problem.steps.isNotEmpty)
+      if (_problem.steps.length > 3)
         ButtonSegment(
           value: WorkspaceTab.jieti,
           icon: Icon(
@@ -347,17 +437,19 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
             _problem.jietiMode == JietiMode.tabbed
                 ? '多视图(${_problem.steps.length})'
                 : '解题(${_problem.steps.length})',
+            maxLines: 1,
+            softWrap: false,
           ),
         ),
       if (_problem.hasVideo)
         const ButtonSegment(
           value: WorkspaceTab.video,
           icon: Icon(Icons.play_circle_outline_rounded, size: 17),
-          label: Text('动画视频'),
+          label: Text('动画视频', maxLines: 1, softWrap: false),
         ),
     ];
 
-    final compareButton = _tab == WorkspaceTab.video
+    final compareButton = _effectiveTab == WorkspaceTab.video
         ? const SizedBox.shrink()
         : GestureDetector(
             onTapDown: (_) => setState(() => _peekingCompare = true),
@@ -370,12 +462,34 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
                 size: 17,
               ),
               label: Text(
-                _tab == WorkspaceTab.subject
+                _effectiveTab == WorkspaceTab.subject
                     ? (_peekingCompare ? '看原题' : '按住/点按对比答案')
                     : (_peekingCompare ? '看回当前' : '按住/点按对比原题'),
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           );
+
+    // Compact AppBar (<400 px): the 上一题/下一题 paging icons live here so
+    // one-tap paging stays available on phones.
+    final pagingButtons = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          tooltip: '上一题 (PageUp)',
+          icon: const Icon(Icons.skip_previous_rounded),
+          onPressed: hasPrev ? () => _navigateProblemDelta(-1) : null,
+        ),
+        const SizedBox(width: 2),
+        IconButton(
+          tooltip: '下一题 (PageDown)',
+          icon: const Icon(Icons.skip_next_rounded),
+          onPressed: hasNext ? () => _navigateProblemDelta(1) : null,
+        ),
+      ],
+    );
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -386,18 +500,29 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
         alignment: WrapAlignment.spaceBetween,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          SegmentedButton<WorkspaceTab>(
-            segments: segments,
-            selected: {_tab},
-            onSelectionChanged: (sel) {
-              _stopAutoPlay();
-              setState(() {
-                _tab = sel.first;
-                _peekingCompare = false;
-              });
-            },
+          // The segmented control keeps its intrinsic width and scrolls
+          // horizontally when the available width is insufficient; the
+          // scrollbar thumb only appears when it actually overflows.
+          Scrollbar(
+            controller: _toolbarTabsController,
+            child: SingleChildScrollView(
+              controller: _toolbarTabsController,
+              scrollDirection: Axis.horizontal,
+              child: SegmentedButton<WorkspaceTab>(
+                segments: segments,
+                selected: {_effectiveTab},
+                onSelectionChanged: (sel) {
+                  _stopAutoPlay();
+                  setState(() {
+                    _tab = sel.first;
+                    _peekingCompare = false;
+                  });
+                },
+              ),
+            ),
           ),
           compareButton,
+          if (showNavArrows) pagingButtons,
         ],
       ),
     );
@@ -415,7 +540,7 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
     String compareAsset;
     String compareLabel;
 
-    switch (_tab) {
+    switch (_effectiveTab) {
       case WorkspaceTab.subject:
         primaryAsset = _problem.subjectImage;
         compareAsset = _problem.answerImage;
@@ -425,8 +550,13 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
         compareAsset = _problem.subjectImage;
         compareLabel = '原题题面';
       case WorkspaceTab.jieti:
-        final safeIdx = _stepIdx.clamp(0, _problem.steps.length - 1);
-        primaryAsset = _problem.steps[safeIdx].image;
+        if (_problem.steps.isEmpty) {
+          // Defensive: never index into an empty step list.
+          primaryAsset = _problem.answerImage;
+        } else {
+          final safeIdx = _stepIdx.clamp(0, _problem.steps.length - 1);
+          primaryAsset = _problem.steps[safeIdx].image;
+        }
         compareAsset = _problem.subjectImage;
         compareLabel = '原题题面';
       case WorkspaceTab.video:
@@ -445,127 +575,251 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
 
   Widget _buildJietiControls(ThemeData theme) {
     final steps = _problem.steps;
+    if (steps.isEmpty) return const SizedBox.shrink();
     final safeIdx = _stepIdx.clamp(0, steps.length - 1);
     final current = steps[safeIdx];
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+
+    final stepTitleStyle =
+        theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600) ??
+        const TextStyle(fontSize: 14, fontWeight: FontWeight.w600);
+    final stepTitleText = '${current.title} (${safeIdx + 1}/${steps.length})';
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+      // Extend past the system navigation bar under Android edge-to-edge.
+      padding: EdgeInsets.fromLTRB(12, 8, 12, 10 + bottomInset),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerLow,
         border: Border(top: BorderSide(color: theme.colorScheme.outlineVariant)),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (current.note.isNotEmpty)
-            Container(
-              width: double.infinity,
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.secondaryContainer.withValues(alpha: 0.55),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                '当前要点：${current.note}',
-                style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w500),
-              ),
-            ),
-          if (_problem.jietiMode == JietiMode.tabbed)
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (var i = 0; i < steps.length; i++) ...[
-                    ChoiceChip(
-                      label: Text(steps[i].title, style: const TextStyle(fontSize: 12)),
-                      selected: i == safeIdx,
-                      onSelected: (_) => setState(() => _stepIdx = i),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                    if (i < steps.length - 1) const SizedBox(width: 6),
-                  ],
-                ],
-              ),
-            )
-          else
-            Row(
-              children: [
-                IconButton.filledTonal(
-                  tooltip: '重置到第 1 步',
-                  icon: const Icon(Icons.first_page_rounded, size: 19),
-                  onPressed: safeIdx > 0 ? () => _stepDelta(-safeIdx) : null,
-                ),
-                const SizedBox(width: 4),
-                FilledButton.tonalIcon(
-                  onPressed: safeIdx > 0 ? () => _stepDelta(-1) : null,
-                  icon: const Icon(Icons.chevron_left_rounded, size: 18),
-                  label: const Text('上一步'),
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  '${current.title} (${safeIdx + 1}/${steps.length})',
-                  style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
-                ),
-                Expanded(
-                  child: steps.length > 1
-                      ? Slider(
-                          value: safeIdx.toDouble(),
-                          min: 0,
-                          max: (steps.length - 1).toDouble(),
-                          divisions: steps.length - 1,
-                          onChanged: (v) {
-                            _stopAutoPlay();
-                            setState(() => _stepIdx = v.round());
-                          },
-                        )
-                      : const SizedBox.shrink(),
-                ),
-                IconButton.filledTonal(
-                  tooltip: _autoPlayingSteps ? '暂停自动步进' : '自动分步演示',
-                  icon: Icon(
-                    _autoPlayingSteps ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                    size: 19,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Threshold: stack into two rows when the center column is narrow
+          // (760 px baseline — e.g. a 960 px desktop window with both side
+          // panels open leaves ~390 px) OR whenever the measured single-line
+          // step title would not leave ~200 px of slider room in one row.
+          // The title width is measured with the exact style + text scaler so
+          // the single-row mode below can keep the title unflexible and let
+          // the Expanded slider absorb the full remainder: no overlap, no
+          // overflow, and no dead space, for any title length.
+          final textScaler = MediaQuery.textScalerOf(context);
+          final titlePainter = TextPainter(
+            text: TextSpan(text: stepTitleText, style: stepTitleStyle),
+            textDirection: TextDirection.ltr,
+            maxLines: 1,
+            textScaler: textScaler,
+          )..layout();
+          final titleWidth = titlePainter.width;
+          titlePainter.dispose();
+          // Reset/prev/next/auto buttons + inter-row gaps (~308 px at scale 1,
+          // only the button labels scale) plus a ~200 px slider minimum.
+          final chromeBudget =
+              224 * textScaler.scale(1.0) + 84 * textScaler.scale(14.0) / 14.0 + 200;
+          final stacked =
+              constraints.maxWidth < 760 ||
+              constraints.maxWidth < titleWidth + chromeBudget;
+
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (current.note.isNotEmpty)
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.secondaryContainer.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  onPressed: steps.length > 1 ? _toggleAutoPlay : null,
+                  child: Text(
+                    '当前要点：${current.note}',
+                    style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w500),
+                  ),
                 ),
-                const SizedBox(width: 6),
-                FilledButton.icon(
-                  onPressed: safeIdx < steps.length - 1 ? () => _stepDelta(1) : null,
-                  icon: const Icon(Icons.chevron_right_rounded, size: 18),
-                  label: const Text('下一步'),
-                ),
-              ],
+              if (_problem.jietiMode == JietiMode.tabbed)
+                _buildTabbedStepChips(steps, safeIdx)
+              else
+                stacked
+                    ? _buildStackedStepControls(
+                        steps: steps,
+                        safeIdx: safeIdx,
+                        titleStyle: stepTitleStyle,
+                        titleText: stepTitleText,
+                      )
+                    : _buildSingleRowStepControls(
+                        steps: steps,
+                        safeIdx: safeIdx,
+                        titleStyle: stepTitleStyle,
+                        titleText: stepTitleText,
+                      ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// 多视图 mode: horizontally scrollable ChoiceChip strip. Unaffected by
+  /// window width (chips get unbounded width inside the scroller, so labels
+  /// never wrap) and sits fine above the note banner on narrow screens.
+  Widget _buildTabbedStepChips(List<SolutionStep> steps, int safeIdx) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (var i = 0; i < steps.length; i++) ...[
+            ChoiceChip(
+              label: Text(steps[i].title, style: const TextStyle(fontSize: 12)),
+              selected: i == safeIdx,
+              onSelected: (_) => setState(() => _stepIdx = i),
+              visualDensity: VisualDensity.compact,
             ),
+            if (i < steps.length - 1) const SizedBox(width: 6),
+          ],
         ],
       ),
     );
   }
 
-  void _showMobileInfoSheet(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.55,
-        maxChildSize: 0.85,
-        builder: (_, controller) => SingleChildScrollView(
-          controller: controller,
-          child: _ProblemDetailPanel(
-            problem: _problem,
-            activeStep: (_tab == WorkspaceTab.jieti &&
-                    _stepIdx < _problem.steps.length)
-                ? _problem.steps[_stepIdx]
-                : null,
-            onCopy: _copyText,
-          ),
+  /// Wide single row — same arrangement as before (reset / prev / title /
+  /// slider / auto / next), with the title left unflexible so the Expanded
+  /// slider absorbs the entire remainder. Safe because the stacked threshold
+  /// above guarantees title + chrome + ~200 px of slider fit in one line.
+  Widget _buildSingleRowStepControls({
+    required List<SolutionStep> steps,
+    required int safeIdx,
+    required TextStyle titleStyle,
+    required String titleText,
+  }) {
+    return Row(
+      children: [
+        IconButton.filledTonal(
+          tooltip: '重置到第 1 步',
+          icon: const Icon(Icons.first_page_rounded, size: 19),
+          onPressed: safeIdx > 0 ? () => _stepDelta(-safeIdx) : null,
         ),
-      ),
+        const SizedBox(width: 4),
+        FilledButton.tonalIcon(
+          onPressed: safeIdx > 0 ? () => _stepDelta(-1) : null,
+          icon: const Icon(Icons.chevron_left_rounded, size: 18),
+          label: const Text('上一步', maxLines: 1, softWrap: false),
+        ),
+        const SizedBox(width: 10),
+        // Deliberately NOT wrapped in Flexible: an inflexible title takes its
+        // exact intrinsic width, so the Expanded slider absorbs the *entire*
+        // remainder (a Flexible title would cap the slider at its flex share
+        // and strand dead space after 下一步 on wide windows). The stacked
+        // threshold above guarantees this row always fits.
+        Text(titleText, maxLines: 1, softWrap: false, style: titleStyle),
+        Expanded(
+          child: steps.length > 1
+              ? Slider(
+                  value: safeIdx.toDouble(),
+                  min: 0,
+                  max: (steps.length - 1).toDouble(),
+                  divisions: steps.length - 1,
+                  onChanged: (v) {
+                    _stopAutoPlay();
+                    setState(() => _stepIdx = v.round());
+                  },
+                )
+              : const SizedBox.shrink(),
+        ),
+        IconButton.filledTonal(
+          tooltip: _autoPlayingSteps ? '暂停自动步进' : '自动分步演示',
+          icon: Icon(
+            _autoPlayingSteps ? Icons.pause_rounded : Icons.play_arrow_rounded,
+            size: 19,
+          ),
+          onPressed: steps.length > 1 ? _toggleAutoPlay : null,
+        ),
+        const SizedBox(width: 6),
+        FilledButton.icon(
+          onPressed: safeIdx < steps.length - 1 ? () => _stepDelta(1) : null,
+          icon: const Icon(Icons.chevron_right_rounded, size: 18),
+          label: const Text('下一步', maxLines: 1, softWrap: false),
+        ),
+      ],
     );
   }
+
+  /// Narrow two-row variant (320 px safe):
+  /// row 1 = 重置 / 上一步 / 步骤标题(Expanded+ellipsis) / 下一步,
+  /// row 2 = 滑块占满 / 自动步进.
+  Widget _buildStackedStepControls({
+    required List<SolutionStep> steps,
+    required int safeIdx,
+    required TextStyle titleStyle,
+    required String titleText,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            IconButton.filledTonal(
+              tooltip: '重置到第 1 步',
+              icon: const Icon(Icons.first_page_rounded, size: 19),
+              onPressed: safeIdx > 0 ? () => _stepDelta(-safeIdx) : null,
+            ),
+            const SizedBox(width: 4),
+            FilledButton.tonalIcon(
+              onPressed: safeIdx > 0 ? () => _stepDelta(-1) : null,
+              icon: const Icon(Icons.chevron_left_rounded, size: 18),
+              label: const Text('上一步', maxLines: 1, softWrap: false),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                titleText,
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: titleStyle,
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilledButton.icon(
+              onPressed: safeIdx < steps.length - 1 ? () => _stepDelta(1) : null,
+              icon: const Icon(Icons.chevron_right_rounded, size: 18),
+              label: const Text('下一步', maxLines: 1, softWrap: false),
+            ),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Row(
+          children: [
+            Expanded(
+              child: steps.length > 1
+                  ? Slider(
+                      value: safeIdx.toDouble(),
+                      min: 0,
+                      max: (steps.length - 1).toDouble(),
+                      divisions: steps.length - 1,
+                      onChanged: (v) {
+                        _stopAutoPlay();
+                        setState(() => _stepIdx = v.round());
+                      },
+                    )
+                  : const SizedBox.shrink(),
+            ),
+            IconButton.filledTonal(
+              tooltip: _autoPlayingSteps ? '暂停自动步进' : '自动分步演示',
+              icon: Icon(
+                _autoPlayingSteps ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                size: 19,
+              ),
+              onPressed: steps.length > 1 ? _toggleAutoPlay : null,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
 }
 
 class _ProblemNavList extends StatelessWidget {
@@ -591,7 +845,13 @@ class _ProblemNavList extends StatelessWidget {
       children: [
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+          // Clear the status bar when embedded in a fullscreen drawer.
+          padding: EdgeInsets.fromLTRB(
+            14,
+            12 + MediaQuery.paddingOf(context).top,
+            14,
+            10,
+          ),
           color: theme.colorScheme.surfaceContainerLow,
           child: Text(
             '$chapterTitle（${problems.length} 题）',
@@ -601,6 +861,9 @@ class _ProblemNavList extends StatelessWidget {
         const Divider(height: 1),
         Expanded(
           child: ListView.builder(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.paddingOf(context).bottom + 8,
+            ),
             itemCount: problems.length,
             itemBuilder: (context, index) {
               final p = problems[index];
@@ -611,9 +874,17 @@ class _ProblemNavList extends StatelessWidget {
                 selected: selected,
                 selectedTileColor: theme.colorScheme.primaryContainer.withValues(alpha: 0.55),
                 leading: Icon(
-                  done ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                  done
+                      ? Icons.check_circle_rounded
+                      : selected
+                          ? Icons.radio_button_checked_rounded
+                          : Icons.radio_button_unchecked_rounded,
                   size: 17,
-                  color: done ? Colors.green.shade600 : theme.colorScheme.outline,
+                  color: done
+                      ? Colors.green.shade600
+                      : selected
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.outline,
                 ),
                 title: Text(
                   p.displayLabel,
@@ -639,11 +910,13 @@ class _ProblemDetailPanel extends StatelessWidget {
   const _ProblemDetailPanel({
     required this.problem,
     required this.activeStep,
+    required this.repo,
     required this.onCopy,
   });
 
   final Problem problem;
   final SolutionStep? activeStep;
+  final CurriculumRepository repo;
   final Future<void> Function(String text, String label) onCopy;
 
   @override
@@ -654,7 +927,11 @@ class _ProblemDetailPanel extends StatelessWidget {
         .toList(growable: false);
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(14),
+      // Clear the system navigation bar when used inside a fullscreen drawer.
+      padding: EdgeInsets.fromLTRB(
+        14, 14, 14,
+        14 + MediaQuery.paddingOf(context).bottom,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -689,6 +966,11 @@ class _ProblemDetailPanel extends StatelessWidget {
                   : '本题未在旧版字库中附带纯文本描述，请直接查看图面与分步解答。',
               style: theme.textTheme.bodyMedium?.copyWith(height: 1.55),
             ),
+          ),
+          const SizedBox(height: 16),
+          StickyNoteCard(
+            repo: repo,
+            problemId: problem.id,
           ),
           if (activeStep != null && activeStep!.note.isNotEmpty) ...[
             const SizedBox(height: 16),

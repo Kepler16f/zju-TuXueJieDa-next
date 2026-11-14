@@ -13,18 +13,31 @@ import 'package:tuxuejieda_next/services/update_service.dart';
 
 void main() {
   group('Curriculum integrity', () {
-    test('curriculum.json has exact 177 wired problems, 67 videos, and valid assets', () {
+    test('curriculum.json (schemaVersion 2) groups 177 problems into 5 page-range chapters with valid assets', () {
       final raw = File('assets/data/curriculum.json').readAsStringSync();
       final decoded = jsonDecode(raw) as Map<String, dynamic>;
       final curriculum = Curriculum.fromJson(decoded);
 
-      expect(curriculum.chapters.length, 4);
+      // Chapters are ordered by display page and only non-empty chapters are listed.
+      expect(decoded['schemaVersion'], 2);
+      expect(
+        curriculum.chapters.map((c) => c.id).toList(),
+        ['tyjc', 'zhst', 'gctb', 'ghyd', 'sjgx'],
+      );
       expect(curriculum.problems.length, 177);
-      expect(curriculum.problemsInChapter('jcty').length, 64);
-      expect(curriculum.problemsInChapter('zht').length, 78);
-      expect(curriculum.problemsInChapter('gct').length, 32);
-      expect(curriculum.problemsInChapter('other').length, 3);
+      expect(curriculum.problemsInChapter('tyjc').length, 42);
+      expect(curriculum.problemsInChapter('zhst').length, 66);
+      expect(curriculum.problemsInChapter('gctb').length, 34);
+      expect(curriculum.problemsInChapter('ghyd').length, 32);
+      expect(curriculum.problemsInChapter('sjgx').length, 3);
       expect(curriculum.problems.where((p) => p.hasVideo).length, 67);
+
+      // Every problem must point back to a declared chapter.
+      final chapterIds = curriculum.chapters.map((c) => c.id).toSet();
+      for (final p in curriculum.problems) {
+        expect(chapterIds.contains(p.chapterId), isTrue,
+            reason: '${p.id} references unknown chapter ${p.chapterId}');
+      }
 
       // Verify verified button page/no overrides vs naive filename IDs
       final p13 = curriculum.findById('13_1')!;
@@ -156,6 +169,6 @@ void main() {
     expect(find.text('图学基础教程习题解答'), findsOneWidget);
     expect(find.text('已启用 177 题'), findsOneWidget);
     expect(find.text('配套动画 67 题'), findsOneWidget);
-    expect(find.text('第 11 页 No.1 题'), findsOneWidget);
+    expect(find.text('第 11 页第 1 题'), findsOneWidget);
   });
 }

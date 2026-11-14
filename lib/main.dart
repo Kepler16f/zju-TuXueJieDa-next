@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'data/curriculum_repository.dart';
-import 'pages/home_page.dart';
+import 'pages/app_shell.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,9 +39,10 @@ class _TuxueJiedaAppState extends State<TuxueJiedaApp> {
         return MaterialApp(
           title: '图学基础教程习题解答',
           debugShowCheckedModeBanner: false,
-          themeMode: _repo.darkMode ? ThemeMode.dark : ThemeMode.light,
+          themeMode: _repo.themeMode,
           theme: ThemeData(
             useMaterial3: true,
+            fontFamily: 'AppSansCJK',
             colorScheme: ColorScheme.fromSeed(
               seedColor: seed,
               brightness: Brightness.light,
@@ -49,12 +50,13 @@ class _TuxueJiedaAppState extends State<TuxueJiedaApp> {
           ),
           darkTheme: ThemeData(
             useMaterial3: true,
+            fontFamily: 'AppSansCJK',
             colorScheme: ColorScheme.fromSeed(
               seedColor: seed,
               brightness: Brightness.dark,
             ),
           ),
-          home: HomePage(repo: _repo),
+          home: AppShell(repo: _repo),
         );
       },
     );

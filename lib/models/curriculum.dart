@@ -116,7 +116,7 @@ class Problem {
 
   bool get hasMultiStep => steps.length > 2;
 
-  String get shortCode => 'P$page · No.$no';
+  String get shortCode => 'P$page · 第$no';
 
   bool matchesQuery(String rawQuery, String chapterTitle) {
     final q = rawQuery.trim().toLowerCase();

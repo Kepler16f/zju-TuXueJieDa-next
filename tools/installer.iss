@@ -38,7 +38,7 @@ DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=dialog
+PrivilegesRequiredOverridesAllowed=dialog commandline
 #if MyAllowedArch != ""
 ArchitecturesAllowed={#MyAllowedArch}
 #endif
@@ -49,14 +49,14 @@ OutputDir={#MyOutputDir}
 OutputBaseFilename={#MyOutputBaseFilename}
 SetupIconFile={#MyIconPath}
 UninstallDisplayIcon={app}\{#MyAppExeName}
-Compression=lzma2/fast
+Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 CloseApplications=yes
 RestartApplications=yes
 
 [Languages]
-Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "chinesesimplified"; MessagesFile: "Languages\ChineseSimplified.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"

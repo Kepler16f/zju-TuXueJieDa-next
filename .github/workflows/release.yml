@@ -1,0 +1,166 @@
+name: release
+
+# 手动触发：构建 Windows/Android 安装包并（可选）发布 GitHub Release。
+# 版本号每次触发时填入（workflow_dispatch inputs），不由脚本猜测。
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '语义化版本号，如 0.1.3'
+        required: true
+        type: string
+      build_number:
+        description: '构建号（pubspec build 号，默认 1）'
+        required: false
+        default: '1'
+        type: string
+      targets:
+        description: '构建目标'
+        required: false
+        default: 'both'
+        type: choice
+        options:
+          - both
+          - windows
+          - android
+      create_release:
+        description: '构建通过后创建 GitHub Release 并上传产物'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    name: flutter test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.9
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test --reporter expanded
+
+  android:
+    name: Android split APKs
+    needs: test
+    if: ${{ inputs.targets != 'windows' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.9
+          cache: true
+      - run: |
+          sed -i "s/^version: .*/version: ${{ inputs.version }}+${{ inputs.build_number }}/" pubspec.yaml
+          flutter pub get
+          flutter build apk --release --split-per-abi \
+            --build-name=${{ inputs.version }} --build-number=${{ inputs.build_number }}
+      - name: Stage renamed APKs
+        run: |
+          APP="图学基础教程习题解答"
+          mkdir -p stage
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk   "stage/${APP}-Android-arm64-v8a-${{ inputs.version }}.apk"
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk "stage/${APP}-Android-armeabi-v7a-${{ inputs.version }}.apk"
+          cp build/app/outputs/flutter-apk/app-x86_64-release.apk      "stage/${APP}-Android-x86_64-${{ inputs.version }}.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apks
+          path: stage/*.apk
+          if-no-files-found: error
+
+  windows:
+    name: Windows arm64 installer
+    needs: test
+    if: ${{ inputs.targets != 'android' }}
+    # 必须用 ARM64 runner：Flutter 无法在 x64 主机上交叉产出 arm64 包。
+    runs-on: windows-11-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.9
+          cache: true
+      - name: Sync version into pubspec
+        shell: pwsh
+        run: |
+          (Get-Content pubspec.yaml -Raw) `
+            -replace '(?m)^version: .*$', "version: ${{ inputs.version }}+${{ inputs.build_number }}" |
+            Set-Content pubspec.yaml -NoNewline
+      - run: flutter pub get
+      - run: flutter build windows --release --build-name=${{ inputs.version }} --build-number=${{ inputs.build_number }}
+      - name: Locate Release output
+        id: out
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem -Path build/windows -Recurse -Filter tuxuejieda_next.exe |
+            Select-Object -First 1
+          if (-not $exe) { throw "tuxuejieda_next.exe not found under build/windows" }
+          "dir=$(Split-Path -Parent $exe.FullName)" >> $Env:GITHUB_OUTPUT
+      - name: Build Inno Setup installer
+        shell: pwsh
+        run: |
+          $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) { throw "ISCC.exe not found at $iscc" }
+          $app = [string]::new([char[]]@(0x56FE,0x5B66,0x57FA,0x7840,0x6559,0x7A0B,0x4E60,0x9898,0x89E3,0x7B54))
+          New-Item -ItemType Directory -Force -Path stage | Out-Null
+          & $iscc `
+            "/DMyAppVersion=${{ inputs.version }}" `
+            "/DMyAppName=$app" `
+            "/DMyAllowedArch=arm64" `
+            "/DMyInstall64BitMode=arm64" `
+            "/DMySourceDir=${{ steps.out.outputs.dir }}" `
+            "/DMyOutputDir=$PWD\stage" `
+            "/DMyOutputBaseFilename=$app-Windows-arm64-${{ inputs.version }}-setup" `
+            "/DMyIconPath=windows\runner\resources\app_icon.ico" `
+            tools\installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed with $LASTEXITCODE" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: stage/*.exe
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: [android, windows]
+    if: ${{ always() && inputs.create_release && needs.android.result == 'success' && needs.windows.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-apks
+          path: stage
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-installer
+          path: stage
+      - name: Checksums
+        run: |
+          cd stage
+          sha256sum *.apk *.exe > SHA256SUMS.txt
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          name: v${{ inputs.version }}
+          draft: false
+          prerelease: false
+          files: stage/*
+          body: |
+            ## 图学基础教程习题解答 v${{ inputs.version }}
+
+            - **Windows arm64**：图学基础教程习题解答-Windows-arm64-${{ inputs.version }}-setup.exe（Inno Setup 安装器，静默安装参数 `/VERYSILENT /ALLUSERS`）
+            - **Android**：按架构分包 APK（arm64-v8a / armeabi-v7a / x86_64），应用名「图学习题解答」，debug 签名供侧载
+
+            非官方学生重制项目，仅供个人学习交流；原内容版权归原出版方所有。

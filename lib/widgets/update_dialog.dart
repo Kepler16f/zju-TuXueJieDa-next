@@ -67,7 +67,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
       _progress = 0;
       _received = 0;
       _total = asset.size;
-      _statusMessage = '正在从 GitHub 下载 ${asset.name}...';
+      _statusMessage = '正在从 GitHub 下载更新包：${asset.name}';
     });
 
     try {
@@ -88,7 +88,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
         _downloading = false;
         _downloadedPath = path;
         _progress = 1.0;
-        _statusMessage = '下载完成，准备安装...';
+        _statusMessage = '下载完成，正在准备安装...';
       });
       await _installDownloaded(path);
     } on DioException catch (e) {
@@ -96,14 +96,14 @@ class _UpdateDialogState extends State<UpdateDialog> {
       setState(() {
         _downloading = false;
         _statusMessage = CancelToken.isCancel(e)
-            ? '已取消下载。'
+            ? '已取消下载，可稍后重新下载。'
             : '下载失败：${e.message ?? e.type.name}';
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _downloading = false;
-        _statusMessage = '下载/安装出错：$e';
+        _statusMessage = '下载或安装出错：$e';
       });
     }
   }
@@ -195,7 +195,10 @@ class _UpdateDialogState extends State<UpdateDialog> {
                     LinearProgressIndicator(value: _progress),
                     const SizedBox(height: 6),
                     Text(
-                      '${_formatBytes(_received)} / ${_formatBytes(_total)}',
+                      _progress != null
+                          ? '${(_progress! * 100).toStringAsFixed(0)}% · '
+                              '${_formatBytes(_received)} / ${_formatBytes(_total)}'
+                          : '${_formatBytes(_received)} / ${_formatBytes(_total)}',
                       style: theme.textTheme.labelSmall,
                     ),
                   ],
