@@ -235,6 +235,7 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
                                         : null,
                                     repo: widget.repo,
                                     onCopy: _copyText,
+                                    noteEditorInDialog: !isDesktop,
                                   ),
                                 ),
                               ],
@@ -370,6 +371,7 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
                               hasNext: hasNext,
                             ),
                             const Divider(height: 1),
+                            if (!isDesktop) _buildStatementBanner(theme),
                             Expanded(child: _buildMainStage()),
                             if (_effectiveTab == WorkspaceTab.jieti &&
                                 _problem.steps.length > 3)
@@ -389,6 +391,7 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
                                 : null,
                             repo: widget.repo,
                             onCopy: _copyText,
+                            noteEditorInDialog: false,
                           ),
                         ),
                       ],
@@ -400,6 +403,33 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
           ),
         );
       },
+    );
+  }
+
+  /// 竖屏/窄屏：把题干直接并入主界面（图片上方），替代抽屉里的"题目要求"。
+  /// 长题干在限高区域内内部滚动，图片始终占据剩余空间。
+  Widget _buildStatementBanner(ThemeData theme) {
+    if (_problem.statement.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 132),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: theme.colorScheme.outlineVariant),
+          ),
+          child: SingleChildScrollView(
+            child: Text(
+              _problem.statement,
+              style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -912,12 +942,16 @@ class _ProblemDetailPanel extends StatelessWidget {
     required this.activeStep,
     required this.repo,
     required this.onCopy,
+    required this.noteEditorInDialog,
   });
 
   final Problem problem;
   final SolutionStep? activeStep;
   final CurriculumRepository repo;
   final Future<void> Function(String text, String label) onCopy;
+
+  /// 竖屏抽屉：便签通过弹窗输入/编辑（横屏侧栏为内联展开输入）。
+  final bool noteEditorInDialog;
 
   @override
   Widget build(BuildContext context) {
@@ -971,6 +1005,7 @@ class _ProblemDetailPanel extends StatelessWidget {
           StickyNoteCard(
             repo: repo,
             problemId: problem.id,
+            editorInDialog: noteEditorInDialog,
           ),
           if (activeStep != null && activeStep!.note.isNotEmpty) ...[
             const SizedBox(height: 16),

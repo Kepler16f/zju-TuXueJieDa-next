@@ -401,7 +401,7 @@ class _HomePageState extends State<HomePage> {
                   sliver: SliverGrid(
                     gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                       maxCrossAxisExtent: 390,
-                      mainAxisExtent: 126,
+                      mainAxisExtent: 172,
                       crossAxisSpacing: 10,
                       mainAxisSpacing: 10,
                     ),
@@ -609,18 +609,23 @@ class _ProblemCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      problem.displayLabel,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        color: theme.colorScheme.onPrimaryContainer,
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          problem.displayLabel,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: theme.colorScheme.onPrimaryContainer,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -658,13 +663,11 @@ class _ProblemCard extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Expanded(
-                child: Text(
-                  problem.statement.isNotEmpty
+                child: _OverflowScrollText(
+                  text: problem.statement.isNotEmpty
                       ? problem.statement.replaceAll('\n', ' ')
                       : '点击查看原题图形、分步详解与标准答案',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(height: 1.3),
+                  style: theme.textTheme.bodySmall?.copyWith(height: 1.35),
                 ),
               ),
               const SizedBox(height: 4),
@@ -752,9 +755,14 @@ class _ProblemRow extends StatelessWidget {
                     : theme.colorScheme.outline,
               ),
               const SizedBox(width: 8),
-              Text(
-                problem.displayLabel,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    problem.displayLabel,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                  ),
+                ),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -844,6 +852,34 @@ class _MiniTag extends StatelessWidget {
           Text(label, style: TextStyle(fontSize: 11, color: fg, fontWeight: FontWeight.w500)),
         ],
       ),
+    );
+  }
+}
+
+/// 卡片内题干：内容不超框时按普通文本展示（全局滑动不受影响），
+/// 溢出时才启用内部滚动，供用户查看完整题干。
+class _OverflowScrollText extends StatelessWidget {
+  const _OverflowScrollText({required this.text, required this.style});
+
+  final String text;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final painter = TextPainter(
+          text: TextSpan(text: text, style: style),
+          textDirection: TextDirection.ltr,
+        )..layout(maxWidth: constraints.maxWidth);
+        final overflows = painter.height > constraints.maxHeight + 0.5;
+        if (!overflows) {
+          return Text(text, style: style);
+        }
+        return SingleChildScrollView(
+          child: Text(text, style: style),
+        );
+      },
     );
   }
 }

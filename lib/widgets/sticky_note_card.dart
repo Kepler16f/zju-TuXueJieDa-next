@@ -14,10 +14,15 @@ class StickyNoteCard extends StatefulWidget {
     super.key,
     required this.repo,
     required this.problemId,
+    this.editorInDialog = false,
   });
 
   final CurriculumRepository repo;
   final String problemId;
+
+  /// 编辑形态：false = 侧栏内联展开输入（横屏/桌面默认）；
+  /// true = 竖屏点按钮弹出对话框输入/编辑（题干已并入主界面，不再内联展开）。
+  final bool editorInDialog;
 
   @override
   State<StickyNoteCard> createState() => _StickyNoteCardState();
@@ -83,6 +88,58 @@ class _StickyNoteCardState extends State<StickyNoteCard> {
 
   void _startEditing() {
     setState(() => _editing = true);
+  }
+
+  /// 竖屏形态：弹出对话框输入/编辑便签，保存后即持久化。
+  Future<void> _openEditorDialog() async {
+    final theme = Theme.of(context);
+    final hasNote = widget.repo.noteFor(widget.problemId).trim().isNotEmpty;
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(hasNote ? '编辑便签' : '添加便签'),
+        content: TextField(
+          controller: _controller,
+          autofocus: true,
+          minLines: 4,
+          maxLines: 10,
+          textInputAction: TextInputAction.newline,
+          decoration: const InputDecoration(
+            hintText: '在这里写你的解题心得/易错点…',
+            border: OutlineInputBorder(),
+          ),
+          style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              _controller
+                ..removeListener(_handleTextChanged)
+                ..text = widget.repo.noteFor(widget.problemId)
+                ..addListener(_handleTextChanged);
+              Navigator.of(dialogContext).pop(false);
+            },
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () {
+              _clearNote();
+              Navigator.of(dialogContext).pop(true);
+            },
+            child: const Text('清空'),
+          ),
+          FilledButton.icon(
+            onPressed: () {
+              _persist(widget.problemId, _controller.text);
+              Navigator.of(dialogContext).pop(true);
+            },
+            icon: const Icon(Icons.check_rounded, size: 16),
+            label: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    if (saved == true && mounted) setState(() {});
   }
 
   void _saveAndCloseEditor() {
@@ -153,7 +210,9 @@ class _StickyNoteCardState extends State<StickyNoteCard> {
                   visualDensity: VisualDensity.compact,
                   iconSize: 18,
                   icon: Icon(hasNote ? Icons.edit_outlined : Icons.add_rounded),
-                  onPressed: _startEditing,
+                  onPressed: widget.editorInDialog
+                      ? _openEditorDialog
+                      : _startEditing,
                 ),
             ],
           ),
@@ -171,6 +230,24 @@ class _StickyNoteCardState extends State<StickyNoteCard> {
                 border: OutlineInputBorder(),
               ),
               style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
+            )
+          else if (widget.editorInDialog)
+            InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: _openEditorDialog,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                child: Text(
+                  hasNote ? noteText : '点此添加便签，方便日后回顾本题',
+                  style: hasNote
+                      ? theme.textTheme.bodyMedium?.copyWith(height: 1.55)
+                      : theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontStyle: FontStyle.italic,
+                        ),
+                ),
+              ),
             )
           else
             InkWell(

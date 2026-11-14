@@ -312,6 +312,8 @@ jobs:
           echo "registry=https://repo.huaweicloud.com/repository/npm/" > ~/.npmrc
           echo "@ohos:registry=https://repo.harmonyos.com/npm/" >> ~/.npmrc
       - name: Init OHOS host project + plugin overlay
+        env:
+          OHOS_APP_VERSION: ${{ inputs.version }}
         run: |
           python3 -m pip install --quiet --disable-pip-version-check pillow
           bash scripts/setup_ohos.sh
@@ -331,6 +333,8 @@ jobs:
           if [ "$status" -ne 0 ]; then
             echo "::notice::flutter exited $status (missing signing config); using unsigned HAP from hvigor"
           fi
+          # SIG dev 引擎的 libflutter.so 未剥离符号：strip 后重打 HAP（约省 4-6MB）
+          python3 scripts/strip_hap_libs.py "$hap" libs/arm64-v8a/libflutter.so
           cp "$hap" "tuxuejieda-HarmonyOS-arm64-${{ inputs.version }}-unsigned.hap"
       - uses: actions/upload-artifact@v7
         with:

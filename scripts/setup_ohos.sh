@@ -9,6 +9,10 @@ cd "$(dirname "$0")/.."
 
 VERSION_LABEL="图学习题解答"
 BUNDLE_ID="com.kepler16f.tuxuejieda"
+OHOS_APP_VERSION="${OHOS_APP_VERSION:-0.0.0}"
+
+# 版本号同步进 pubspec（flutter create 生成 app.json5 的 versionName 取自它）
+sed -i -E "s/^version: .*/version: $OHOS_APP_VERSION/" pubspec.yaml
 
 if [ ! -d ohos ]; then
   flutter create --platforms ohos --project-name tuxuejieda_next .
@@ -16,6 +20,8 @@ fi
 
 # bundleName 指向本项目域名
 sed -i -E "s/\"bundleName\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"bundleName\": \"$BUNDLE_ID\"/" ohos/AppScope/app.json5
+# 版本号（用户在 Release 里看到的 versionName）
+sed -i -E "s/\"versionName\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"versionName\": \"$OHOS_APP_VERSION\"/" ohos/AppScope/app.json5
 
 # 应用名（AppScope string 资源里的 app_name）
 python3 - <<'PY'
@@ -31,11 +37,13 @@ with io.open(p, "w", encoding="utf-8", newline="\n") as f:
 print("app label -> 图学习题解答")
 PY
 
-# 图标：替换分层图标的前景图为圆规
+# 图标：launcher 实际读取的是 entry 模块的 icon.png；AppScope 分层图标一并覆盖
 ICON="$PWD/tools/app_icon_master.png"
-MEDIA_DIR="ohos/AppScope/resources/base/media"
-if [ -f "$ICON" ] && [ -d "$MEDIA_DIR" ] && python3 -c "import PIL" 2>/dev/null; then
-  python3 - "$ICON" "$MEDIA_DIR" <<'PY'
+ICON_DIRS="ohos/entry/src/main/resources/base/media ohos/AppScope/resources/base/media"
+if [ -f "$ICON" ] && python3 -c "import PIL" 2>/dev/null; then
+  for MEDIA_DIR in $ICON_DIRS; do
+    [ -d "$MEDIA_DIR" ] || continue
+    python3 - "$ICON" "$MEDIA_DIR" <<'PY'
 import sys, os
 from PIL import Image
 icon, media = sys.argv[1], sys.argv[2]
@@ -46,6 +54,7 @@ for fn in os.listdir(media):
         im.resize((512, 512), Image.LANCZOS).save(os.path.join(media, fn))
         print("icon ->", fn)
 PY
+  done
 fi
 
 # 插件切换到 SIG ohos 适配（pub get 之后其它平台构建不受影响：本文件不提交）
