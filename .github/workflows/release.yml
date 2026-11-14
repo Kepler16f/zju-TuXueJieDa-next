@@ -17,12 +17,15 @@ on:
       targets:
         description: '构建目标'
         required: false
-        default: 'both'
+        default: 'all'
         type: choice
         options:
-          - both
+          - all
           - windows
           - android
+          - macos
+          - linux
+          - ios
       ref:
         description: '构建的代码引用（留空 = main；补发历史版本时填 tag 如 v0.1.3）'
         required: false
@@ -57,7 +60,7 @@ jobs:
   android:
     name: Android split APKs
     needs: test
-    if: ${{ inputs.targets != 'windows' }}
+    if: ${{ inputs.targets == 'all' || inputs.targets == 'android' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -89,7 +92,7 @@ jobs:
   windows:
     name: Windows ${{ matrix.arch }} installer
     needs: test
-    if: ${{ inputs.targets != 'android' }}
+    if: ${{ inputs.targets == 'all' || inputs.targets == 'windows' }}
     strategy:
       fail-fast: false
       matrix:
@@ -153,13 +156,103 @@ jobs:
           path: stage/*.exe
           if-no-files-found: error
 
+  macos:
+    name: macOS app (arm64)
+    needs: test
+    if: ${{ inputs.targets == 'all' || inputs.targets == 'macos' }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || 'main' }}
+      - name: Set up Flutter 3.47.9 (source checkout)
+        run: |
+          git clone --depth 1 --branch 3.47.9 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          "$RUNNER_TEMP/flutter/bin/flutter" --version
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - run: |
+          sed -i '' "s/^version: .*/version: ${{ inputs.version }}+${{ inputs.build_number }}/" pubspec.yaml
+          flutter pub get
+          flutter build macos --release
+      - name: Zip app bundle
+        run: |
+          app=$(find build/macos/Build/Products/Release -maxdepth 1 -name "*.app" | head -1)
+          if [ -z "$app" ]; then echo "no .app found"; exit 1; fi
+          ditto -c -k --sequesterRsrc --keepParent "$app" "tuxuejieda-macOS-arm64-${{ inputs.version }}.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-app
+          path: tuxuejieda-macOS-arm64-*.zip
+          if-no-files-found: error
+
+  linux:
+    name: Linux bundle (x64)
+    needs: test
+    if: ${{ inputs.targets == 'all' || inputs.targets == 'linux' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || 'main' }}
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libgtk-3-dev pkg-config cmake
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.9
+          cache: true
+      - run: |
+          sed -i "s/^version: .*/version: ${{ inputs.version }}+${{ inputs.build_number }}/" pubspec.yaml
+          flutter pub get
+          flutter build linux --release
+      - run: |
+          tar czf "tuxuejieda-Linux-x64-${{ inputs.version }}.tar.gz" -C build/linux/x64/release/bundle .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-bundle
+          path: tuxuejieda-Linux-x64-*.tar.gz
+          if-no-files-found: error
+
+  ios:
+    name: iOS unsigned IPA
+    needs: test
+    if: ${{ inputs.targets == 'all' || inputs.targets == 'ios' }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || 'main' }}
+      - name: Set up Flutter 3.47.9 (source checkout)
+        run: |
+          git clone --depth 1 --branch 3.47.9 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          "$RUNNER_TEMP/flutter/bin/flutter" --version
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - run: |
+          sed -i '' "s/^version: .*/version: ${{ inputs.version }}+${{ inputs.build_number }}/" pubspec.yaml
+          flutter pub get
+          flutter build ios --release --no-codesign
+      - name: Package unsigned IPA
+        run: |
+          mkdir Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -qry "tuxuejieda-iOS-${{ inputs.version }}-unsigned.ipa" Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: tuxuejieda-iOS-*-unsigned.ipa
+          if-no-files-found: error
+
   release:
     name: Publish GitHub Release
-    needs: [android, windows]
+    needs: [android, windows, macos, linux, ios]
     if: >-
       ${{ always() && inputs.create_release &&
           needs.windows.result == 'success' &&
-          (needs.android.result == 'success' || needs.android.result == 'skipped') }}
+          (needs.android.result == 'success' || needs.android.result == 'skipped') &&
+          (needs.macos.result == 'success' || needs.macos.result == 'skipped') &&
+          (needs.linux.result == 'success' || needs.linux.result == 'skipped') &&
+          (needs.ios.result == 'success' || needs.ios.result == 'skipped') }}
     runs-on: ubuntu-latest
     steps:
       - name: Download windows installers
@@ -174,11 +267,17 @@ jobs:
         with:
           name: android-apks
           path: stage
+      - name: Download macos/linux/ios artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "{macos-app,linux-bundle,ios-ipa}"
+          path: stage
+          merge-multiple: true
       - name: Checksums
         run: |
           cd stage
           files=()
-          for f in *.apk *.exe; do [ -e "$f" ] && files+=("$f"); done
+          for f in *.apk *.exe *.zip *.tar.gz; do [ -e "$f" ] && files+=("$f"); done
           sha256sum "${files[@]}" > SHA256SUMS.txt
       - name: Publish release (gh CLI)
         env:
@@ -201,6 +300,9 @@ jobs:
             echo "### 说明"
             echo ""
             echo "- Android APK 为 debug 签名供侧载，应用名「图学习题解答」"
+            echo "- macOS 应用未签名：首次打开需右键 → 打开，或在终端执行 xattr -cr"
+            echo "- iOS IPA 未签名：需自签（AltStore/Sideloadly/TrollStore 等）后安装"
+            echo "- Linux 包为 x64 便携 bundle（视频播放暂未支持，后续接入 media_kit）"
             echo "- SHA256SUMS.txt 为上述产物的校验和"
             echo "- 非官方学生重制项目，仅供个人学习交流；原内容版权归原出版方所有。"
           } > notes.md
