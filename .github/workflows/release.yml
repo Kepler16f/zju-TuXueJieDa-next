@@ -149,16 +149,10 @@ jobs:
         with:
           name: windows-installer
           path: stage
-      - name: Rename to release names (Chinese app prefix) + checksums
+      - name: Checksums
         run: |
           cd stage
-          V="${{ inputs.version }}"
-          APP="图学基础教程习题解答"
-          mv "tuxuejieda-Android-arm64-v8a-$V.apk"       "$APP-Android-arm64-v8a-$V.apk"
-          mv "tuxuejieda-Android-armeabi-v7a-$V.apk"     "$APP-Android-armeabi-v7a-$V.apk"
-          mv "tuxuejieda-Android-x86_64-$V.apk"          "$APP-Android-x86_64-$V.apk"
-          mv "tuxuejieda-Windows-arm64-$V-setup.exe"     "$APP-Windows-arm64-$V-setup.exe"
-          sha256sum "$APP"-*.apk "$APP"-*.exe > SHA256SUMS.txt
+          sha256sum *.apk *.exe > SHA256SUMS.txt
       - name: Publish release (gh CLI; patch unicode asset names)
         env:
           GH_TOKEN: ${{ github.token }}
@@ -168,24 +162,13 @@ jobs:
           {
             echo "## $APP v$V"
             echo ""
-            echo "- **Windows arm64**：$APP-Windows-arm64-$V-setup.exe（Inno Setup 安装器，静默安装参数 \`/VERYSILENT /ALLUSERS\`）"
+            echo "- **Windows arm64**：tuxuejieda-Windows-arm64-$V-setup.exe（Inno Setup 安装器，静默安装参数 \`/VERYSILENT /ALLUSERS\`）"
             echo "- **Android**：按架构分包 APK（arm64-v8a / armeabi-v7a / x86_64），应用名「图学习题解答」，debug 签名供侧载"
             echo "- SHA256SUMS.txt 为上述产物的校验和"
             echo ""
             echo "非官方学生重制项目，仅供个人学习交流；原内容版权归原出版方所有。"
           } > notes.md
           gh release create "v$V" --title "v$V" --notes-file notes.md 2>/dev/null || gh release edit "v$V" --title "v$V" --notes-file notes.md
+          # GitHub asset-name API strips non-ASCII, so release assets use the
+          # ASCII prefix "tuxuejieda-*"; the body lists the Chinese names.
           gh release upload "v$V" stage/* --clobber
-          # Some upload paths strip non-ASCII asset names; patch each one back.
-          gh api "repos/$GITHUB_REPOSITORY/releases/tags/v$V" --jq '.assets[] | "\(.id) \(.name)"' | while read -r id name; do
-            new=""
-            case "$name" in
-              "tuxuejieda-Android-arm64-v8a-$V.apk")    new="$APP-Android-arm64-v8a-$V.apk" ;;
-              "tuxuejieda-Android-armeabi-v7a-$V.apk")  new="$APP-Android-armeabi-v7a-$V.apk" ;;
-              "tuxuejieda-Android-x86_64-$V.apk")       new="$APP-Android-x86_64-$V.apk" ;;
-              "tuxuejieda-Windows-arm64-$V-setup.exe")  new="$APP-Windows-arm64-$V-setup.exe" ;;
-            esac
-            if [ -n "$new" ]; then
-              gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/assets/$id" -f name="$new" --jq '.name'
-            fi
-          done
