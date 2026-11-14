@@ -173,6 +173,14 @@ class _UpdateDialogState extends State<UpdateDialog> {
                   ),
                   if (res?.release != null && res!.release!.body.isNotEmpty) ...[
                     const SizedBox(height: 10),
+                    Text(
+                      '更新内容',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
                     Container(
                       width: double.infinity,
                       constraints: const BoxConstraints(maxHeight: 160),
@@ -183,9 +191,16 @@ class _UpdateDialogState extends State<UpdateDialog> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: SingleChildScrollView(
+                        // Strip markdown headings/symbols so the release body
+                        // reads as plain notes inside the dialog.
                         child: Text(
-                          res.release!.body,
-                          style: theme.textTheme.bodySmall,
+                          res.release!.body
+                              .split('\n')
+                              .where((l) => !l.trim().startsWith('#'))
+                              .join('\n')
+                              .replaceAll('**', '')
+                              .trim(),
+                          style: theme.textTheme.bodySmall?.copyWith(height: 1.45),
                         ),
                       ),
                     ),

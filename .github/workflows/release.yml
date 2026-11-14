@@ -23,8 +23,13 @@ on:
           - both
           - windows
           - android
+      ref:
+        description: '构建的代码引用（留空 = main；补发历史版本时填 tag 如 v0.1.3）'
+        required: false
+        default: ''
+        type: string
       create_release:
-        description: '构建通过后创建 GitHub Release 并上传产物'
+        description: '构建通过后创建/更新 GitHub Release 并上传产物'
         required: false
         default: true
         type: boolean
@@ -38,6 +43,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || 'main' }}
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -54,6 +61,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || 'main' }}
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -66,8 +75,6 @@ jobs:
             --build-name=${{ inputs.version }} --build-number=${{ inputs.build_number }}
       - name: Stage renamed APKs
         run: |
-          # ASCII stage names: upload-artifact strips non-ASCII; the release
-          # job renames files back to the Chinese app-name prefix.
           APP="tuxuejieda"
           mkdir -p stage
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk   "stage/${APP}-Android-arm64-v8a-${{ inputs.version }}.apk"
@@ -80,15 +87,27 @@ jobs:
           if-no-files-found: error
 
   windows:
-    name: Windows arm64 installer
+    name: Windows ${{ matrix.arch }} installer
     needs: test
     if: ${{ inputs.targets != 'android' }}
-    # 必须用 ARM64 runner：官方不发 Windows arm64 release zip，但 arm64 主机上的
-    # Flutter 工具会原生下载 windows-arm64 的 Dart SDK 与引擎构件（同本地构建）。
-    runs-on: windows-11-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: windows-11-arm
+            allowed: arm64
+            mode64: arm64
+          - arch: x64
+            runner: windows-latest
+            allowed: x64compatible
+            mode64: x64compatible
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Flutter 3.47.9 (source checkout; subosito zip lacks arm64)
+        with:
+          ref: ${{ inputs.ref || 'main' }}
+      - name: Set up Flutter 3.47.9 (source checkout)
         shell: pwsh
         run: |
           git clone --depth 1 --branch 3.47.9 https://github.com/flutter/flutter.git "$env:RUNNER_TEMP\flutter"
@@ -120,55 +139,70 @@ jobs:
           & $iscc `
             "/DMyAppVersion=${{ inputs.version }}" `
             "/DMyAppName=$app" `
-            "/DMyAllowedArch=arm64" `
-            "/DMyInstall64BitMode=arm64" `
+            "/DMyAllowedArch=${{ matrix.allowed }}" `
+            "/DMyInstall64BitMode=${{ matrix.mode64 }}" `
             "/DMySourceDir=${{ steps.out.outputs.dir }}" `
             "/DMyOutputDir=$PWD\stage" `
-            "/DMyOutputBaseFilename=tuxuejieda-Windows-arm64-${{ inputs.version }}-setup" `
+            "/DMyOutputBaseFilename=tuxuejieda-Windows-${{ matrix.arch }}-${{ inputs.version }}-setup" `
             "/DMyIconPath=$PWD\windows\runner\resources\app_icon.ico" `
             tools\installer.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed with $LASTEXITCODE" }
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-installer
+          name: windows-installer-${{ matrix.arch }}
           path: stage/*.exe
           if-no-files-found: error
 
   release:
     name: Publish GitHub Release
     needs: [android, windows]
-    if: ${{ always() && inputs.create_release && needs.android.result == 'success' && needs.windows.result == 'success' }}
+    if: >-
+      ${{ always() && inputs.create_release &&
+          needs.windows.result == 'success' &&
+          (needs.android.result == 'success' || needs.android.result == 'skipped') }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - name: Download windows installers
+        uses: actions/download-artifact@v4
+        with:
+          pattern: windows-installer-*
+          path: stage
+          merge-multiple: true
+      - name: Download android APKs
+        if: ${{ needs.android.result == 'success' }}
+        uses: actions/download-artifact@v4
         with:
           name: android-apks
-          path: stage
-      - uses: actions/download-artifact@v4
-        with:
-          name: windows-installer
           path: stage
       - name: Checksums
         run: |
           cd stage
-          sha256sum *.apk *.exe > SHA256SUMS.txt
-      - name: Publish release (gh CLI; patch unicode asset names)
+          files=()
+          for f in *.apk *.exe; do [ -e "$f" ] && files+=("$f"); done
+          sha256sum "${files[@]}" > SHA256SUMS.txt
+      - name: Publish release (gh CLI)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           V="${{ inputs.version }}"
-          APP="图学基础教程习题解答"
           {
-            echo "## $APP v$V"
+            echo "## 图学基础教程习题解答 v$V"
             echo ""
-            echo "- **Windows arm64**：tuxuejieda-Windows-arm64-$V-setup.exe（Inno Setup 安装器，静默安装参数 \`/VERYSILENT /ALLUSERS\`）"
-            echo "- **Android**：按架构分包 APK（arm64-v8a / armeabi-v7a / x86_64），应用名「图学习题解答」，debug 签名供侧载"
+            echo "### 下载"
+            echo ""
+            echo "| 平台 | 产物 |"
+            echo "|---|---|"
+            for f in $(ls | grep -v SHA256SUMS | sort); do
+              echo "| - | $f |"
+            done
+            echo ""
+            echo "Windows 静默安装参数：/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /FORCECLOSEAPPLICATIONS /ALLUSERS"
+            echo ""
+            echo "### 说明"
+            echo ""
+            echo "- Android APK 为 debug 签名供侧载，应用名「图学习题解答」"
             echo "- SHA256SUMS.txt 为上述产物的校验和"
-            echo ""
-            echo "非官方学生重制项目，仅供个人学习交流；原内容版权归原出版方所有。"
+            echo "- 非官方学生重制项目，仅供个人学习交流；原内容版权归原出版方所有。"
           } > notes.md
           gh release create "v$V" --title "v$V" --notes-file notes.md 2>/dev/null || gh release edit "v$V" --title "v$V" --notes-file notes.md
-          # GitHub asset-name API strips non-ASCII, so release assets use the
-          # ASCII prefix "tuxuejieda-*"; the body lists the Chinese names.
           gh release upload "v$V" stage/* --clobber

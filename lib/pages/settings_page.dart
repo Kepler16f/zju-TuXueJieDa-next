@@ -291,8 +291,8 @@ class _SettingsPageState extends State<SettingsPage> {
                                   const SizedBox(height: 2),
                                   Text(
                                     _appVersion.isEmpty
-                                        ? '非官方重制项目 · 正在获取版本…'
-                                        : '非官方重制项目 · 版本 v$_appVersion',
+                                        ? '正在获取版本…'
+                                        : '非官方重制 · 版本 v$_appVersion',
                                     style: theme.textTheme.bodySmall?.copyWith(
                                       color: theme.colorScheme.onSurfaceVariant,
                                     ),
@@ -332,7 +332,19 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '本应用为非官方学生重制项目，仅供个人学习交流，原内容版权归原出版方所有。',
+                          '《图学基础教程》配套习题的跨平台数字化解答手册：'
+                          '收录 177 道习题的原题、分步图解与动画演示，'
+                          '支持搜索、收藏、便签、深浅色主题与多端使用。',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            height: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '本项目为学生个人学习用途的非官方重制，'
+                          '与教材编者及出版方无关联；'
+                          '习题内容版权归原出版方所有。',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                             height: 1.5,
