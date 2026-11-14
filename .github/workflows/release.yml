@@ -123,7 +123,7 @@ jobs:
             "/DMySourceDir=${{ steps.out.outputs.dir }}" `
             "/DMyOutputDir=$PWD\stage" `
             "/DMyOutputBaseFilename=$app-Windows-arm64-${{ inputs.version }}-setup" `
-            "/DMyIconPath=windows\runner\resources\app_icon.ico" `
+            "/DMyIconPath=$PWD\windows\runner\resources\app_icon.ico" `
             tools\installer.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed with $LASTEXITCODE" }
       - uses: actions/upload-artifact@v4
