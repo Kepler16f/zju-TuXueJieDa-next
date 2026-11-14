@@ -300,6 +300,9 @@ jobs:
           FLUTTER_OHOS_DIR="$RUNNER_TEMP/flutter_ohos"
           git clone --branch "$FLUTTER_OHOS_REF" --depth 1 "$FLUTTER_OHOS_REPO" "$FLUTTER_OHOS_DIR"
           git -C "$FLUTTER_OHOS_DIR" fetch --tags --force || true
+          # dev 分支浅克隆没有可描述的 tag，flutter 版本会探测成 0.0.0-unknown，
+          # 导致插件声明 flutter: >=x.y.z 的约束全部解析失败。在 HEAD 强制打版本 tag。
+          git -C "$FLUTTER_OHOS_DIR" tag -f 3.47.9 HEAD || true
           cd "$FLUTTER_OHOS_DIR"
           git config --global --add safe.directory "$FLUTTER_OHOS_DIR"
           echo "$FLUTTER_OHOS_DIR/bin" >> "$GITHUB_PATH"
