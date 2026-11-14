@@ -83,10 +83,11 @@ jobs:
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk   "stage/${APP}-Android-arm64-v8a-${{ inputs.version }}.apk"
           cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk "stage/${APP}-Android-armeabi-v7a-${{ inputs.version }}.apk"
           cp build/app/outputs/flutter-apk/app-x86_64-release.apk      "stage/${APP}-Android-x86_64-${{ inputs.version }}.apk"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: android-apks
           path: stage/*.apk
+          archive: false
           if-no-files-found: error
 
   windows:
@@ -150,10 +151,11 @@ jobs:
             "/DMyIconPath=$PWD\windows\runner\resources\app_icon.ico" `
             tools\installer.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed with $LASTEXITCODE" }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows-installer-${{ matrix.arch }}
           path: stage/*.exe
+          archive: false
           if-no-files-found: error
 
   macos:
@@ -179,10 +181,11 @@ jobs:
           app=$(find build/macos/Build/Products/Release -maxdepth 1 -name "*.app" | head -1)
           if [ -z "$app" ]; then echo "no .app found"; exit 1; fi
           ditto -c -k --sequesterRsrc --keepParent "$app" "tuxuejieda-macOS-arm64-${{ inputs.version }}.zip"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macos-app
           path: tuxuejieda-macOS-arm64-*.zip
+          archive: false
           if-no-files-found: error
 
   linux:
@@ -208,10 +211,11 @@ jobs:
           flutter build linux --release
       - run: |
           tar czf "tuxuejieda-Linux-x64-${{ inputs.version }}.tar.gz" -C build/linux/x64/release/bundle .
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-bundle
           path: tuxuejieda-Linux-x64-*.tar.gz
+          archive: false
           if-no-files-found: error
 
   ios:
@@ -237,10 +241,11 @@ jobs:
           mkdir Payload
           cp -R build/ios/iphoneos/Runner.app Payload/
           zip -qry "tuxuejieda-iOS-${{ inputs.version }}-unsigned.ipa" Payload
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ios-ipa
           path: tuxuejieda-iOS-*-unsigned.ipa
+          archive: false
           if-no-files-found: error
 
   release:
@@ -256,19 +261,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download windows installers
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: windows-installer-*
           path: stage
           merge-multiple: true
       - name: Download android APKs
         if: ${{ needs.android.result == 'success' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: android-apks
           path: stage
       - name: Download macos/linux/ios artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: "{macos-app,linux-bundle,ios-ipa}"
           path: stage
