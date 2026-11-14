@@ -52,6 +52,9 @@ fi
 cat > pubspec_overrides.yaml <<'OVR'
 # 由 scripts/setup_ohos.sh 生成，仅鸿蒙构建使用（CI 内生成、不提交）。
 dependency_overrides:
+  # 鸿蒙 fork 的 Dart 为 3.6.x：flutter_lints 6.x 需要 ^3.8.0，降级到 5.x
+  flutter_lints:
+    version: "5.0.0"
   video_player:
     git:
       url: "https://gitee.com/openharmony-sig/flutter_packages.git"

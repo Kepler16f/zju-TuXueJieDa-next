@@ -84,10 +84,23 @@ jobs:
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk   "stage/${APP}-Android-arm64-v8a-${{ inputs.version }}.apk"
           cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk "stage/${APP}-Android-armeabi-v7a-${{ inputs.version }}.apk"
           cp build/app/outputs/flutter-apk/app-x86_64-release.apk      "stage/${APP}-Android-x86_64-${{ inputs.version }}.apk"
+      # v7 with archive:false allows only ONE file per artifact -> split per ABI
       - uses: actions/upload-artifact@v7
         with:
-          name: android-apks
-          path: stage/*.apk
+          name: android-apk-arm64-v8a
+          path: stage/tuxuejieda-Android-arm64-v8a-*.apk
+          archive: false
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: android-apk-armeabi-v7a
+          path: stage/tuxuejieda-Android-armeabi-v7a-*.apk
+          archive: false
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: android-apk-x86_64
+          path: stage/tuxuejieda-Android-x86_64-*.apk
           archive: false
           if-no-files-found: error
 
@@ -219,6 +232,36 @@ jobs:
           archive: false
           if-no-files-found: error
 
+  linux-arm64:
+    name: Linux bundle (arm64)
+    needs: test
+    if: ${{ inputs.targets == 'all' || inputs.targets == 'linux' }}
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || 'main' }}
+      - name: Set up Flutter 3.47.9 (source checkout)
+        run: |
+          git clone --depth 1 --branch 3.47.9 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          "$RUNNER_TEMP/flutter/bin/flutter" --version
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libgtk-3-dev pkg-config cmake
+      - run: |
+          sed -i "s/^version: .*/version: ${{ inputs.version }}+${{ inputs.build_number }}/" pubspec.yaml
+          flutter pub get
+          flutter build linux --release
+      - run: |
+          tar czf "tuxuejieda-Linux-arm64-${{ inputs.version }}.tar.gz" -C build/linux/arm64/release/bundle .
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-bundle-arm64
+          path: tuxuejieda-Linux-arm64-*.tar.gz
+          archive: false
+          if-no-files-found: error
+
   ios:
     name: iOS unsigned IPA
     needs: test
@@ -313,7 +356,7 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    needs: [android, windows, macos, linux, ios, ohos]
+    needs: [android, windows, macos, linux, linux-arm64, ios, ohos]
     if: >-
       ${{ always() && inputs.create_release &&
           needs.windows.result == 'success' &&
@@ -334,12 +377,13 @@ jobs:
         if: ${{ needs.android.result == 'success' }}
         uses: actions/download-artifact@v7
         with:
-          name: android-apks
+          pattern: android-apk-*
           path: stage
+          merge-multiple: true
       - name: Download macos/linux/ios artifacts
         uses: actions/download-artifact@v7
         with:
-          pattern: "{macos-app,linux-bundle,ios-ipa,ohos-hap}"
+          pattern: "{macos-app,linux-bundle,linux-bundle-arm64,ios-ipa,ohos-hap}"
           path: stage
           merge-multiple: true
       - name: Checksums
