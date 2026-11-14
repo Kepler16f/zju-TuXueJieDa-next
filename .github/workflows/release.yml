@@ -129,6 +129,7 @@ jobs:
         shell: pwsh
         run: |
           git clone --depth 1 --branch 3.47.9 https://github.com/flutter/flutter.git "$env:RUNNER_TEMP\flutter"
+          git -C "$env:RUNNER_TEMPlutter" fetch --tags --force
           & "$env:RUNNER_TEMP\flutter\bin\flutter.bat" --version
           "$env:RUNNER_TEMP\flutter\bin" >> $Env:GITHUB_PATH
       - name: Sync version into pubspec
@@ -184,6 +185,7 @@ jobs:
       - name: Set up Flutter 3.47.9 (source checkout)
         run: |
           git clone --depth 1 --branch 3.47.9 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          git -C "$RUNNER_TEMP/flutter" fetch --tags --force
           "$RUNNER_TEMP/flutter/bin/flutter" --version
           echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
       - run: |
@@ -244,6 +246,7 @@ jobs:
       - name: Set up Flutter 3.47.9 (source checkout)
         run: |
           git clone --depth 1 --branch 3.47.9 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          git -C "$RUNNER_TEMP/flutter" fetch --tags --force
           "$RUNNER_TEMP/flutter/bin/flutter" --version
           echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
       - run: |
@@ -274,6 +277,7 @@ jobs:
       - name: Set up Flutter 3.47.9 (source checkout)
         run: |
           git clone --depth 1 --branch 3.47.9 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          git -C "$RUNNER_TEMP/flutter" fetch --tags --force
           "$RUNNER_TEMP/flutter/bin/flutter" --version
           echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
       - run: |
