@@ -81,15 +81,17 @@ jobs:
     name: Windows arm64 installer
     needs: test
     if: ${{ inputs.targets != 'android' }}
-    # 必须用 ARM64 runner：Flutter 无法在 x64 主机上交叉产出 arm64 包。
+    # 必须用 ARM64 runner：官方不发 Windows arm64 release zip，但 arm64 主机上的
+    # Flutter 工具会原生下载 windows-arm64 的 Dart SDK 与引擎构件（同本地构建）。
     runs-on: windows-11-arm
     steps:
       - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          flutter-version: 3.47.9
-          cache: true
+      - name: Set up Flutter 3.47.9 (source checkout; subosito zip lacks arm64)
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch 3.47.9 https://github.com/flutter/flutter.git "$env:RUNNER_TEMP\flutter"
+          & "$env:RUNNER_TEMP\flutter\bin\flutter.bat" --version
+          "$env:RUNNER_TEMP\flutter\bin" >> $Env:GITHUB_PATH
       - name: Sync version into pubspec
         shell: pwsh
         run: |
