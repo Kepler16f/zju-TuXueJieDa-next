@@ -48,6 +48,15 @@ for fn in os.listdir(media):
 PY
 fi
 
+# 根包自身的版本约束不受 dependency_overrides 影响（pub 规则）：
+# 鸿蒙构建时放宽 5 个插件的约束为 any，由上面的 overrides 指到 SIG 适配版本。
+sed -i -E 's/^(  video_player: ).*/any/;
+             s/^(  shared_preferences: ).*/any/;
+             s/^(  path_provider: ).*/any/;
+             s/^(  url_launcher: ).*/any/;
+             s/^(  package_info_plus: ).*/any/' pubspec.yaml
+sed -i 's/flutter_lints: \^6.0.0/flutter_lints: ^5.0.0/' pubspec.yaml
+
 # 插件切换到 SIG ohos 适配（pub get 之后其它平台构建不受影响：本文件不提交）
 cat > pubspec_overrides.yaml <<'OVR'
 # 由 scripts/setup_ohos.sh 生成，仅鸿蒙构建使用（CI 内生成、不提交）。
