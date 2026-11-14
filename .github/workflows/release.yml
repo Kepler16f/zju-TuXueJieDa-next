@@ -1,16 +1,16 @@
 name: release
 
-# 手动触发：构建 Windows/Android 安装包并（可选）发布 GitHub Release。
+# 手动触发：构建 Windows/Android/macOS/Linux/iOS/HarmonyOS 安装包并（可选）发布 Release。
 # 版本号每次触发时填入（workflow_dispatch inputs），不由脚本猜测。
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: '语义化版本号，如 0.1.3'
+        description: '语义化版本号，如 0.1.4'
         required: true
         type: string
       build_number:
-        description: '构建号（pubspec build 号，默认 1）'
+        description: '构建号（默认 1）'
         required: false
         default: '1'
         type: string
@@ -28,14 +28,14 @@ on:
           - ios
           - ohos
       ref:
-        description: '构建的代码引用（留空 = main；补发历史版本时填 tag 如 v0.1.3）'
+        description: '构建的代码引用（留空 = main；补发历史版本填 tag）'
         required: false
         default: ''
         type: string
       create_release:
-        description: '构建通过后创建/更新 GitHub Release 并上传产物'
+        description: '构建通过后创建/更新 GitHub Release（发布需单独征得同意）'
         required: false
-        default: true
+        default: false
         type: boolean
 
 permissions:
@@ -84,7 +84,6 @@ jobs:
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk   "stage/${APP}-Android-arm64-v8a-${{ inputs.version }}.apk"
           cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk "stage/${APP}-Android-armeabi-v7a-${{ inputs.version }}.apk"
           cp build/app/outputs/flutter-apk/app-x86_64-release.apk      "stage/${APP}-Android-x86_64-${{ inputs.version }}.apk"
-      # v7 with archive:false allows only ONE file per artifact -> split per ABI
       - uses: actions/upload-artifact@v7
         with:
           name: android-apk-arm64-v8a
@@ -128,10 +127,10 @@ jobs:
       - name: Set up Flutter 3.47.9 (source checkout)
         shell: pwsh
         run: |
-          git clone --depth 1 --branch 3.47.9 https://github.com/flutter/flutter.git "$env:RUNNER_TEMP\flutter"
-          git -C "$env:RUNNER_TEMPlutter" fetch --tags --force
-          & "$env:RUNNER_TEMP\flutter\bin\flutter.bat" --version
-          "$env:RUNNER_TEMP\flutter\bin" >> $Env:GITHUB_PATH
+          git clone --depth 1 --branch 3.47.9 https://github.com/flutter/flutter.git "$env:RUNNER_TEMP/flutter"
+          git -C "$env:RUNNER_TEMP/flutter" fetch --tags --force
+          & "$env:RUNNER_TEMP/flutter/bin/flutter.bat" --version
+          "$env:RUNNER_TEMP/flutter/bin" >> $Env:GITHUB_PATH
       - name: Sync version into pubspec
         shell: pwsh
         run: |
@@ -161,10 +160,10 @@ jobs:
             "/DMyAllowedArch=${{ matrix.allowed }}" `
             "/DMyInstall64BitMode=${{ matrix.mode64 }}" `
             "/DMySourceDir=${{ steps.out.outputs.dir }}" `
-            "/DMyOutputDir=$PWD\stage" `
+            "/DMyOutputDir=$PWD/stage" `
             "/DMyOutputBaseFilename=tuxuejieda-Windows-${{ matrix.arch }}-${{ inputs.version }}-setup" `
-            "/DMyIconPath=$PWD\windows\runner\resources\app_icon.ico" `
-            tools\installer.iss
+            "/DMyIconPath=$PWD/windows/runner/resources/app_icon.ico" `
+            tools/installer.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed with $LASTEXITCODE" }
       - uses: actions/upload-artifact@v7
         with:
@@ -205,10 +204,18 @@ jobs:
           if-no-files-found: error
 
   linux:
-    name: Linux bundle (x64)
+    name: Linux bundle (${{ matrix.arch }})
     needs: test
     if: ${{ inputs.targets == 'all' || inputs.targets == 'linux' }}
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -216,33 +223,6 @@ jobs:
       - run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build libgtk-3-dev pkg-config cmake
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          flutter-version: 3.47.9
-          cache: true
-      - run: |
-          sed -i "s/^version: .*/version: ${{ inputs.version }}+${{ inputs.build_number }}/" pubspec.yaml
-          flutter pub get
-          flutter build linux --release
-      - run: |
-          tar czf "tuxuejieda-Linux-x64-${{ inputs.version }}.tar.gz" -C build/linux/x64/release/bundle .
-      - uses: actions/upload-artifact@v7
-        with:
-          name: linux-bundle
-          path: tuxuejieda-Linux-x64-*.tar.gz
-          archive: false
-          if-no-files-found: error
-
-  linux-arm64:
-    name: Linux bundle (arm64)
-    needs: test
-    if: ${{ inputs.targets == 'all' || inputs.targets == 'linux' }}
-    runs-on: ubuntu-24.04-arm
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref || 'main' }}
       - name: Set up Flutter 3.47.9 (source checkout)
         run: |
           git clone --depth 1 --branch 3.47.9 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
@@ -250,18 +230,14 @@ jobs:
           "$RUNNER_TEMP/flutter/bin/flutter" --version
           echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
       - run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build libgtk-3-dev pkg-config cmake
-      - run: |
           sed -i "s/^version: .*/version: ${{ inputs.version }}+${{ inputs.build_number }}/" pubspec.yaml
           flutter pub get
           flutter build linux --release
-      - run: |
-          tar czf "tuxuejieda-Linux-arm64-${{ inputs.version }}.tar.gz" -C build/linux/arm64/release/bundle .
+      - run: tar czf "tuxuejieda-Linux-${{ matrix.arch }}-${{ inputs.version }}.tar.gz" -C build/linux/${{ matrix.arch }}/release/bundle .
       - uses: actions/upload-artifact@v7
         with:
-          name: linux-bundle-arm64
-          path: tuxuejieda-Linux-arm64-*.tar.gz
+          name: linux-bundle-${{ matrix.arch }}
+          path: tuxuejieda-Linux-*.tar.gz
           archive: false
           if-no-files-found: error
 
@@ -323,6 +299,7 @@ jobs:
         run: |
           FLUTTER_OHOS_DIR="$RUNNER_TEMP/flutter_ohos"
           git clone --branch "$FLUTTER_OHOS_REF" --depth 1 "$FLUTTER_OHOS_REPO" "$FLUTTER_OHOS_DIR"
+          git -C "$FLUTTER_OHOS_DIR" fetch --tags --force || true
           cd "$FLUTTER_OHOS_DIR"
           git config --global --add safe.directory "$FLUTTER_OHOS_DIR"
           echo "$FLUTTER_OHOS_DIR/bin" >> "$GITHUB_PATH"
@@ -360,7 +337,7 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    needs: [android, windows, macos, linux, linux-arm64, ios, ohos]
+    needs: [android, windows, macos, linux, ios, ohos]
     if: >-
       ${{ always() && inputs.create_release &&
           needs.windows.result == 'success' &&
@@ -371,23 +348,10 @@ jobs:
           (needs.ohos.result == 'success' || needs.ohos.result == 'skipped') }}
     runs-on: ubuntu-latest
     steps:
-      - name: Download windows installers
+      - name: Download build artifacts
         uses: actions/download-artifact@v7
         with:
-          pattern: windows-installer-*
-          path: stage
-          merge-multiple: true
-      - name: Download android APKs
-        if: ${{ needs.android.result == 'success' }}
-        uses: actions/download-artifact@v7
-        with:
-          pattern: android-apk-*
-          path: stage
-          merge-multiple: true
-      - name: Download macos/linux/ios artifacts
-        uses: actions/download-artifact@v7
-        with:
-          pattern: "{macos-app,linux-bundle,linux-bundle-arm64,ios-ipa,ohos-hap}"
+          pattern: "{android-apk-*,windows-installer-*,macos-app,linux-bundle-*,ios-ipa,ohos-hap}"
           path: stage
           merge-multiple: true
       - name: Checksums
@@ -417,10 +381,10 @@ jobs:
             echo "### 说明"
             echo ""
             echo "- Android APK 为 debug 签名供侧载，应用名「图学习题解答」"
-            echo "- macOS 应用未签名：首次打开需右键 → 打开，或在终端执行 xattr -cr"
+            echo "- macOS 应用未签名：首次打开需右键 → 打开，或执行 xattr -cr"
             echo "- iOS IPA 未签名：需自签（AltStore/Sideloadly/TrollStore 等）后安装"
-            echo "- Linux 包为 x64 便携 bundle（视频播放暂未支持，后续接入 media_kit）"
-            echo "- 鸿蒙 HAP 未签名：需 DevEco Studio 签名后安装（或使用企业证书分发）"
+            echo "- Linux 包为 x64/arm64 便携 bundle（视频播放暂未支持）"
+            echo "- 鸿蒙 HAP 未签名：需 DevEco Studio 签名后安装"
             echo "- SHA256SUMS.txt 为上述产物的校验和"
             echo "- 非官方学生重制项目，仅供个人学习交流；原内容版权归原出版方所有。"
           } > notes.md
