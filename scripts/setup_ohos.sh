@@ -34,7 +34,7 @@ PY
 # 图标：替换分层图标的前景图为圆规
 ICON="$PWD/tools/app_icon_master.png"
 MEDIA_DIR="ohos/AppScope/resources/base/media"
-if [ -f "$ICON" ] && [ -d "$MEDIA_DIR" ]; then
+if [ -f "$ICON" ] && [ -d "$MEDIA_DIR" ] && python3 -c "import PIL" 2>/dev/null; then
   python3 - "$ICON" "$MEDIA_DIR" <<'PY'
 import sys, os
 from PIL import Image

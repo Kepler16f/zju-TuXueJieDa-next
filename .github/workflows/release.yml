@@ -313,6 +313,7 @@ jobs:
           echo "@ohos:registry=https://repo.harmonyos.com/npm/" >> ~/.npmrc
       - name: Init OHOS host project + plugin overlay
         run: |
+          python3 -m pip install --quiet --disable-pip-version-check pillow
           bash scripts/setup_ohos.sh
           flutter pub get
       - name: Build HAP (unsigned fallback)
