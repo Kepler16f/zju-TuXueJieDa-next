@@ -66,7 +66,9 @@ jobs:
             --build-name=${{ inputs.version }} --build-number=${{ inputs.build_number }}
       - name: Stage renamed APKs
         run: |
-          APP="图学基础教程习题解答"
+          # ASCII stage names: upload-artifact strips non-ASCII; the release
+          # job renames files back to the Chinese app-name prefix.
+          APP="tuxuejieda"
           mkdir -p stage
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk   "stage/${APP}-Android-arm64-v8a-${{ inputs.version }}.apk"
           cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk "stage/${APP}-Android-armeabi-v7a-${{ inputs.version }}.apk"
@@ -122,7 +124,7 @@ jobs:
             "/DMyInstall64BitMode=arm64" `
             "/DMySourceDir=${{ steps.out.outputs.dir }}" `
             "/DMyOutputDir=$PWD\stage" `
-            "/DMyOutputBaseFilename=$app-Windows-arm64-${{ inputs.version }}-setup" `
+            "/DMyOutputBaseFilename=tuxuejieda-Windows-arm64-${{ inputs.version }}-setup" `
             "/DMyIconPath=$PWD\windows\runner\resources\app_icon.ico" `
             tools\installer.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed with $LASTEXITCODE" }
@@ -147,10 +149,16 @@ jobs:
         with:
           name: windows-installer
           path: stage
-      - name: Checksums
+      - name: Rename to release names (Chinese app prefix) + checksums
         run: |
           cd stage
-          sha256sum *.apk *.exe > SHA256SUMS.txt
+          V="${{ inputs.version }}"
+          APP="图学基础教程习题解答"
+          mv "tuxuejieda-Android-arm64-v8a-$V.apk"       "$APP-Android-arm64-v8a-$V.apk"
+          mv "tuxuejieda-Android-armeabi-v7a-$V.apk"     "$APP-Android-armeabi-v7a-$V.apk"
+          mv "tuxuejieda-Android-x86_64-$V.apk"          "$APP-Android-x86_64-$V.apk"
+          mv "tuxuejieda-Windows-arm64-$V-setup.exe"     "$APP-Windows-arm64-$V-setup.exe"
+          sha256sum "$APP"-*.apk "$APP"-*.exe > SHA256SUMS.txt
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
