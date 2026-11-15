@@ -34,8 +34,7 @@ with io.open(p, encoding="utf-8") as f:
 for item in data.get("string", []):
     if item.get("name") == "EntryAbility_label":
         item["value"] = "图学习题解答"
-with io.open(p, "w", encoding="utf-8", newline="
-") as f:
+with io.open(p, "w", encoding="utf-8") as f:
     json.dump(data, f, ensure_ascii=False, indent=2)
 print("entry label -> 图学习题解答")
 PY
