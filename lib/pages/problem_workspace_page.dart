@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../data/curriculum_repository.dart';
 import '../models/curriculum.dart';
+import '../services/platform_caps.dart';
 import '../widgets/problem_video_player.dart';
 import '../widgets/sticky_note_card.dart';
 import '../widgets/zoomable_diagram_canvas.dart';
@@ -295,7 +296,7 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
                           ),
                           onPressed: () => setState(() => _showDetailSidebar = !_showDetailSidebar),
                         ),
-                      ] else
+                      ] else if (!PlatformCaps.isWeb)
                         IconButton(
                           tooltip: widget.repo.noteFor(_problem.id).trim().isNotEmpty
                               ? '编辑便签'
@@ -1033,12 +1034,14 @@ class _ProblemDetailPanel extends StatelessWidget {
               style: theme.textTheme.bodyMedium?.copyWith(height: 1.55),
             ),
           ),
-          const SizedBox(height: 16),
-          StickyNoteCard(
-            repo: repo,
-            problemId: problem.id,
-            editorInDialog: noteEditorInDialog,
-          ),
+          if (!PlatformCaps.isWeb) ...[
+            const SizedBox(height: 16),
+            StickyNoteCard(
+              repo: repo,
+              problemId: problem.id,
+              editorInDialog: noteEditorInDialog,
+            ),
+          ],
           if (activeStep != null && activeStep!.note.isNotEmpty) ...[
             const SizedBox(height: 16),
             Text(

@@ -5,6 +5,7 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
 import '../data/curriculum_repository.dart';
 import '../models/curriculum.dart';
+import '../services/platform_caps.dart';
 import 'problem_workspace_page.dart';
 
 enum ProblemFilter { all, withVideo, multiStep, bookmarked, unfinished }
@@ -381,7 +382,7 @@ class _HomePageState extends State<HomePage> {
                           chapterTitle: ch.title,
                           done: repo.isCompleted(problem.id),
                           bookmarked: repo.isBookmarked(problem.id),
-                          hasNote: repo.noteFor(problem.id).isNotEmpty,
+                          hasNote: !PlatformCaps.isWeb && repo.noteFor(problem.id).isNotEmpty,
                           onTap: () => _openProblem(curriculum, problem),
                           onToggleDone: () => repo.toggleCompleted(problem.id),
                           onToggleBookmark: () => repo.toggleBookmarked(problem.id),

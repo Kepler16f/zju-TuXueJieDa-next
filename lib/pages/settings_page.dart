@@ -179,14 +179,15 @@ class _SettingsPageState extends State<SettingsPage> {
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
-                        SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('显示“笔记”页签'),
-                          subtitle: const Text(
-                              '在底部/侧边导航中增加笔记页签，聚合查看收藏的题目与写过便签的题目（默认关闭）'),
-                          value: repo.showNotesTab,
-                          onChanged: (value) => repo.setShowNotesTab(value),
-                        ),
+                        if (!_isWeb)
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('显示“笔记”页签'),
+                            subtitle: const Text(
+                                '在底部/侧边导航中增加笔记页签，聚合查看收藏的题目与写过便签的题目（默认关闭）'),
+                            value: repo.showNotesTab,
+                            onChanged: (value) => repo.setShowNotesTab(value),
+                          ),
                       ],
                     ),
                   ),
@@ -240,13 +241,15 @@ class _SettingsPageState extends State<SettingsPage> {
                                 value: '${repo.bookmarkedIds.length}',
                               ),
                             ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: _StatTile(
-                                label: '便签',
-                                value: '${repo.noteCount}',
+                            if (!_isWeb) ...[
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: _StatTile(
+                                  label: '便签',
+                                  value: '${repo.noteCount}',
+                                ),
                               ),
-                            ),
+                            ],
                           ],
                         ),
                         const SizedBox(height: 12),
@@ -270,14 +273,15 @@ class _SettingsPageState extends State<SettingsPage> {
                               ),
                               child: const Text('清空收藏'),
                             ),
-                            OutlinedButton(
-                              onPressed: () => _clearWithConfirm(
-                                title: '清空便签',
-                                message: '将删除全部题目的便签内容，且无法恢复。确定继续吗？',
-                                action: repo.clearNotes,
+                            if (!_isWeb)
+                              OutlinedButton(
+                                onPressed: () => _clearWithConfirm(
+                                  title: '清空便签',
+                                  message: '将删除全部题目的便签内容，且无法恢复。确定继续吗？',
+                                  action: repo.clearNotes,
+                                ),
+                                child: const Text('清空便签'),
                               ),
-                              child: const Text('清空便签'),
-                            ),
                           ],
                         ),
                       ],
@@ -422,7 +426,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         Text(
                           '《图学基础教程》配套习题的跨平台数字化解答手册：'
                           '收录 177 道习题的原题、分步图解与动画演示，'
-                          '支持搜索、收藏、便签、深浅色主题与多端使用。',
+                          '支持搜索、收藏${_isWeb ? '' : '、便签'}、深浅色主题与多端使用。',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                             height: 1.5,

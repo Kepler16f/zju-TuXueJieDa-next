@@ -95,7 +95,8 @@ class _AppShellState extends State<AppShell> {
       builder: (context, _) {
         final pages = <Widget>[
           HomePage(repo: widget.repo),
-          if (widget.repo.showNotesTab) NotesPage(repo: widget.repo),
+          if (!PlatformCaps.isWeb && widget.repo.showNotesTab)
+            NotesPage(repo: widget.repo),
           SettingsPage(repo: widget.repo, updateService: _updateService),
         ];
         // The tab list can shrink under the current selection (e.g. turning
@@ -159,7 +160,7 @@ class _AppShellState extends State<AppShell> {
         selectedIcon: Icons.library_books_rounded,
         label: '题库',
       ),
-      if (widget.repo.showNotesTab)
+      if (!PlatformCaps.isWeb && widget.repo.showNotesTab)
         const _ShellDestination(
           icon: Icons.sticky_note_2_outlined,
           selectedIcon: Icons.sticky_note_2_rounded,
