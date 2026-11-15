@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 
+import 'dart:async';
+
 import 'data/curriculum_repository.dart';
+import 'services/notification_service.dart';
 import 'pages/app_shell.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  unawaited(NotificationService.instance.init());
   runApp(const TuxueJiedaApp());
 }
 

@@ -28,7 +28,12 @@ String _normalizeArch(String raw) {
 }
 
 Future<PlatformTargetInfo> detectPlatformTarget() async {
-  final os = Platform.operatingSystem.toLowerCase();
+  final osRaw = Platform.operatingSystem.toLowerCase();
+  // 鸿蒙 fork 的 dart:io 可能把平台报成 ohos；兜底用系统版本串识别。
+  final versionLower = Platform.operatingSystemVersion.toLowerCase();
+  final os = (osRaw == 'ohos' || versionLower.contains('openharmony'))
+      ? 'ohos'
+      : osRaw;
   String arch = _normalizeArch(Platform.version);
 
   if (Platform.isWindows) {

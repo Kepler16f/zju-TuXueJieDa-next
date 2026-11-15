@@ -34,11 +34,48 @@ class _SettingsPageState extends State<SettingsPage> {
 
   bool get _isWindows => !kIsWeb && Platform.isWindows;
   bool get _isAndroid => !kIsWeb && Platform.isAndroid;
+  bool get _isIOS => !kIsWeb && Platform.isIOS;
+
+  /// 鸿蒙：OHOS fork 的 dart:io 平台串可能是 ohos，或系统版本串含 OpenHarmony。
+  bool get _isOhos {
+    if (kIsWeb) return false;
+    try {
+      if (Platform.operatingSystem == 'ohos') return true;
+      return Platform.operatingSystemVersion
+          .toLowerCase()
+          .contains('openharmony');
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 镜像下载设置（异步加载后落到本地状态）。
+  bool _mirrorUse = true;
+  int _mirrorIndex = 1;
+  bool _mirrorLoaded = false;
 
   @override
   void initState() {
     super.initState();
     _loadVersion();
+    _loadMirrorSettings();
+  }
+
+  Future<void> _loadMirrorSettings() async {
+    final settings = await widget.updateService.loadMirrorSettings();
+    if (!mounted) return;
+    setState(() {
+      _mirrorUse = settings.useMirror;
+      _mirrorIndex = settings.mirrorIndex;
+      _mirrorLoaded = true;
+    });
+  }
+
+  Future<void> _saveMirrorSettings() async {
+    await widget.updateService.setMirrorSettings(
+      useMirror: _mirrorUse,
+      index: _mirrorIndex,
+    );
   }
 
   Future<void> _loadVersion() async {
@@ -303,14 +340,73 @@ class _SettingsPageState extends State<SettingsPage> {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        FilledButton.tonalIcon(
-                          onPressed: () => UpdateDialog.show(
-                            context,
-                            service: widget.updateService,
+                        if (!_isIOS && !_isOhos)
+                          FilledButton.tonalIcon(
+                            onPressed: () => UpdateDialog.show(
+                              context,
+                              service: widget.updateService,
+                            ),
+                            icon: const Icon(Icons.system_update_alt_rounded, size: 18),
+                            label: const Text('检查更新'),
                           ),
-                          icon: const Icon(Icons.system_update_alt_rounded, size: 18),
-                          label: const Text('检查更新'),
-                        ),
+                        if (!_isIOS && !_isOhos) ...[
+                          const SizedBox(height: 4),
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('使用镜像加速下载'),
+                            subtitle: const Text('国内直连 GitHub Releases 缓慢时开启'),
+                            value: _mirrorUse,
+                            onChanged: (value) {
+                              setState(() => _mirrorUse = value);
+                              _saveMirrorSettings();
+                            },
+                          ),
+                          if (_mirrorUse)
+                            RadioGroup<int>(
+                              groupValue: _mirrorIndex,
+                              onChanged: (value) {
+                                setState(() => _mirrorIndex = value ?? 1);
+                                _saveMirrorSettings();
+                              },
+                              child: Column(
+                                children: [
+                                  for (var i = 0;
+                                      i <
+                                          UpdateService
+                                              .downloadMirrors.length;
+                                      i++)
+                                    RadioListTile<int>(
+                                      contentPadding: EdgeInsets.zero,
+                                      dense: true,
+                                      value: i,
+                                      title: Text(UpdateService
+                                          .downloadMirrors[i].label),
+                                      subtitle: UpdateService
+                                              .downloadMirrors[i].prefix.isEmpty
+                                          ? null
+                                          : Text(
+                                              UpdateService
+                                                  .downloadMirrors[i].prefix,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          if (!_mirrorLoaded)
+                            const Padding(
+                              padding: EdgeInsets.only(bottom: 8),
+                              child: LinearProgressIndicator(minHeight: 2),
+                            ),
+                          Text(
+                            '镜像站由社区维护、时效不定；若下载仍失败可切换其它选项或关闭镜像直连。',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
                         ListTile(
                           contentPadding: EdgeInsets.zero,
                           dense: true,

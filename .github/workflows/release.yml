@@ -191,15 +191,20 @@ jobs:
           sed -i '' "s/^version: .*/version: ${{ inputs.version }}+${{ inputs.build_number }}/" pubspec.yaml
           flutter pub get
           flutter build macos --release
-      - name: Zip app bundle
+      - name: Create DMG
         run: |
           app=$(find build/macos/Build/Products/Release -maxdepth 1 -name "*.app" | head -1)
           if [ -z "$app" ]; then echo "no .app found"; exit 1; fi
-          ditto -c -k --sequesterRsrc --keepParent "$app" "tuxuejieda-macOS-arm64-${{ inputs.version }}.zip"
+          brew install create-dmg || true
+          create-dmg             --volname "图学基础教程习题解答"             --window-pos 200 120 --window-size 660 420             --icon-size 96 --app-drop-link 440 210             "tuxuejieda-macOS-arm64-${{ inputs.version }}.dmg" "$app" || true
+          # create-dmg 失败（退出码非零窗口样式）时退回 hdiutil 只读镜像
+          if [ ! -e "tuxuejieda-macOS-arm64-${{ inputs.version }}.dmg" ]; then
+            hdiutil create -volname "图学基础教程习题解答" -srcfolder "$app"               -format UDZO -o "tuxuejieda-macOS-arm64-${{ inputs.version }}.dmg"
+          fi
       - uses: actions/upload-artifact@v7
         with:
-          name: macos-app
-          path: tuxuejieda-macOS-arm64-*.zip
+          name: macos-dmg
+          path: tuxuejieda-macOS-arm64-*.dmg
           archive: false
           if-no-files-found: error
 
@@ -406,7 +411,7 @@ jobs:
         run: |
           cd stage
           files=()
-          for f in *.apk *.exe *.zip *.deb *.hap; do [ -e "$f" ] && files+=("$f"); done
+          for f in *.apk *.exe *.dmg *.deb *.hap; do [ -e "$f" ] && files+=("$f"); done
           sha256sum "${files[@]}" > SHA256SUMS.txt
       - name: Publish release (gh CLI)
         env:
@@ -429,7 +434,7 @@ jobs:
             echo "### 说明"
             echo ""
             echo "- Android APK 为 debug 签名供侧载，应用名「图学习题解答」"
-            echo "- macOS 应用未签名：首次打开需右键 → 打开，或执行 xattr -cr"
+            echo "- macOS 为 dmg（未签名）：首次打开需右键 → 打开，或执行 xattr -cr"
             echo "- iOS IPA 未签名：需自签（AltStore/Sideloadly/TrollStore 等）后安装"
             echo "- Linux 为 deb 包（x64/amd64 与 arm64），安装后从应用菜单启动；视频播放暂未支持"
             echo "- 鸿蒙 HAP 未签名：需 DevEco Studio 签名后安装"

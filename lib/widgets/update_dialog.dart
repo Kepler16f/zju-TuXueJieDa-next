@@ -1,11 +1,12 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../services/notification_service.dart';
 import '../services/update_service.dart';
 
-/// Modal dialog checking GitHub Releases, streaming package downloads with
-/// progress, and triggering native installation on Windows / Android / Linux.
+/// 模态更新对话框：检查 GitHub Releases、后台下载安装包（可关闭对话框，
+/// 系统通知显示进度），并在对话框内以 Markdown 展示 Release 说明。
 class UpdateDialog extends StatefulWidget {
   const UpdateDialog({super.key, required this.service});
 
@@ -26,31 +27,27 @@ class UpdateDialog extends StatefulWidget {
 class _UpdateDialogState extends State<UpdateDialog> {
   UpdateCheckResult? _result;
   bool _checking = true;
-  bool _downloading = false;
-  double? _progress;
-  int _received = 0;
-  int _total = 0;
-  String? _downloadedPath;
-  String? _statusMessage;
-  CancelToken? _cancelToken;
 
   @override
   void initState() {
     super.initState();
+    NotificationService.instance.init();
+    widget.service.backgroundDownload.addListener(_onBackgroundChanged);
     _runCheck();
   }
 
   @override
   void dispose() {
-    _cancelToken?.cancel();
+    widget.service.backgroundDownload.removeListener(_onBackgroundChanged);
     super.dispose();
   }
 
+  void _onBackgroundChanged() {
+    if (mounted) setState(() {});
+  }
+
   Future<void> _runCheck() async {
-    setState(() {
-      _checking = true;
-      _statusMessage = null;
-    });
+    setState(() => _checking = true);
     final res = await widget.service.checkForUpdate();
     if (!mounted) return;
     setState(() {
@@ -59,53 +56,16 @@ class _UpdateDialogState extends State<UpdateDialog> {
     });
   }
 
-  Future<void> _startDownload(ReleaseAsset asset) async {
-    final token = CancelToken();
-    setState(() {
-      _cancelToken = token;
-      _downloading = true;
-      _progress = 0;
-      _received = 0;
-      _total = asset.size;
-      _statusMessage = '正在从 GitHub 下载更新包：${asset.name}';
-    });
+  /// 判定当前检查结果对应的下载任务状态。
+  BackgroundDownloadState? _stateFor(ReleaseAsset? asset) {
+    final bg = widget.service.backgroundDownload.value;
+    if (bg == null || asset == null || bg.asset.name != asset.name) return null;
+    return bg;
+  }
 
-    try {
-      final path = await widget.service.downloadAsset(
-        asset,
-        cancelToken: token,
-        onProgress: (received, total) {
-          if (!mounted) return;
-          setState(() {
-            _received = received;
-            _total = total > 0 ? total : asset.size;
-            _progress = _total > 0 ? (received / _total).clamp(0.0, 1.0) : null;
-          });
-        },
-      );
-      if (!mounted) return;
-      setState(() {
-        _downloading = false;
-        _downloadedPath = path;
-        _progress = 1.0;
-        _statusMessage = '下载完成，正在准备安装...';
-      });
-      await _installDownloaded(path);
-    } on DioException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _downloading = false;
-        _statusMessage = CancelToken.isCancel(e)
-            ? '已取消下载，可稍后重新下载。'
-            : '下载失败：${e.message ?? e.type.name}';
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _downloading = false;
-        _statusMessage = '下载或安装出错：$e';
-      });
-    }
+  Future<void> _startDownload(ReleaseAsset asset) async {
+    await widget.service.startBackgroundDownload(asset);
+    if (mounted) setState(() {});
   }
 
   Future<void> _installDownloaded(String path) async {
@@ -116,9 +76,9 @@ class _UpdateDialogState extends State<UpdateDialog> {
       target: res.target,
     );
     if (!mounted) return;
-    setState(() {
-      _statusMessage = msg ?? '下载已保存到：$path';
-    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg ?? '下载已保存到：$path')),
+    );
   }
 
   String _formatBytes(int bytes) {
@@ -132,6 +92,12 @@ class _UpdateDialogState extends State<UpdateDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final res = _result;
+    final release = res?.release;
+    final bg = _stateFor(res?.matchedAsset);
+    final downloading = bg != null && !bg.done && !bg.failed && !bg.cancelled;
+    final percent = (bg != null && bg.total > 0)
+        ? (bg.received * 100 / bg.total).clamp(0.0, 100.0)
+        : null;
 
     return AlertDialog(
       title: const Row(
@@ -171,7 +137,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  if (res?.release != null && res!.release!.body.isNotEmpty) ...[
+                  if (release != null && release.body.isNotEmpty) ...[
                     const SizedBox(height: 10),
                     Text(
                       '更新内容',
@@ -183,7 +149,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
                     const SizedBox(height: 4),
                     Container(
                       width: double.infinity,
-                      constraints: const BoxConstraints(maxHeight: 160),
+                      constraints: const BoxConstraints(maxHeight: 220),
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         color: theme.colorScheme.surfaceContainerHighest
@@ -191,38 +157,55 @@ class _UpdateDialogState extends State<UpdateDialog> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: SingleChildScrollView(
-                        // Strip markdown headings/symbols so the release body
-                        // reads as plain notes inside the dialog.
-                        child: Text(
-                          res.release!.body
-                              .split('\n')
-                              .where((l) => !l.trim().startsWith('#'))
-                              .join('\n')
-                              .replaceAll('**', '')
-                              .trim(),
-                          style: theme.textTheme.bodySmall?.copyWith(height: 1.45),
+                        child: MarkdownBody(
+                          data: release.body,
+                          selectable: false,
+                          styleSheet: MarkdownStyleSheet.fromTheme(theme)
+                              .copyWith(
+                            h1: theme.textTheme.titleMedium,
+                            h2: theme.textTheme.titleMedium,
+                            h3: theme.textTheme.titleSmall,
+                            p: theme.textTheme.bodySmall
+                                ?.copyWith(height: 1.45),
+                            listBullet: theme.textTheme.bodySmall,
+                          ),
                         ),
                       ),
                     ),
                   ],
-                  if (_downloading || _progress != null) ...[
+                  if (downloading || (bg?.done ?? false)) ...[
                     const SizedBox(height: 14),
-                    LinearProgressIndicator(value: _progress),
-                    const SizedBox(height: 6),
-                    Text(
-                      _progress != null
-                          ? '${(_progress! * 100).toStringAsFixed(0)}% · '
-                              '${_formatBytes(_received)} / ${_formatBytes(_total)}'
-                          : '${_formatBytes(_received)} / ${_formatBytes(_total)}',
-                      style: theme.textTheme.labelSmall,
-                    ),
+                    if (downloading) ...[
+                      LinearProgressIndicator(value: percent),
+                      const SizedBox(height: 6),
+                      Text(
+                        '${_formatBytes(bg.received)} / ${_formatBytes(bg.total)}'
+                        '（${percent?.toStringAsFixed(0)}%）· 可关闭此窗口，通知栏显示进度',
+                        style: theme.textTheme.labelSmall,
+                      ),
+                    ] else if (bg?.done ?? false)
+                      Text(
+                        '下载完成：${_formatBytes(bg!.received)} · ${bg.path}',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
                   ],
-                  if (_statusMessage != null) ...[
+                  if (bg?.failed ?? false) ...[
                     const SizedBox(height: 10),
                     Text(
-                      _statusMessage!,
+                      '下载失败：${bg!.error}',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.primary,
+                        color: theme.colorScheme.error,
+                      ),
+                    ),
+                  ],
+                  if (bg?.cancelled ?? false) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      '下载已取消，可重新下载。',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -232,19 +215,22 @@ class _UpdateDialogState extends State<UpdateDialog> {
       actions: [
         TextButton(
           onPressed: () => launchUrl(
-            Uri.parse(res?.release?.htmlUrl ?? UpdateService.releasesPageUrl),
+            Uri.parse(release?.htmlUrl ?? UpdateService.releasesPageUrl),
             mode: LaunchMode.externalApplication,
           ),
           child: const Text('打开发布页'),
         ),
-        if (_downloading)
+        if (downloading) ...[
           TextButton(
-            onPressed: () => _cancelToken?.cancel(),
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('后台下载'),
+          ),
+          TextButton(
+            onPressed: widget.service.cancelBackgroundDownload,
             child: const Text('取消下载'),
-          )
-        else ...[
-          if (!_checking &&
-              res?.status == UpdateStatus.error)
+          ),
+        ] else ...[
+          if (!_checking && res?.status == UpdateStatus.error)
             TextButton(
               onPressed: _runCheck,
               child: const Text('重试'),
@@ -252,16 +238,18 @@ class _UpdateDialogState extends State<UpdateDialog> {
           if (!_checking &&
               res?.status == UpdateStatus.updateAvailable &&
               res?.matchedAsset != null &&
-              _downloadedPath == null)
+              !(bg?.done ?? false))
             FilledButton.icon(
-              onPressed: () => _startDownload(res!.matchedAsset!),
-              icon: const Icon(Icons.download_rounded),
-              label: const Text('立即下载更新'),
+              onPressed: bg != null && bg.failed
+                  ? () => _startDownload(res!.matchedAsset!)
+                  : () => _startDownload(res!.matchedAsset!),
+              icon: const Icon(Icons.download_rounded, size: 16),
+              label: Text((bg?.failed ?? false) ? '重试下载' : '立即下载更新'),
             ),
-          if (_downloadedPath != null)
+          if (bg?.done ?? false)
             FilledButton.icon(
-              onPressed: () => _installDownloaded(_downloadedPath!),
-              icon: const Icon(Icons.install_desktop_rounded),
+              onPressed: () => _installDownloaded(bg!.path!),
+              icon: const Icon(Icons.install_desktop_rounded, size: 16),
               label: const Text('立即安装 / 打开'),
             ),
         ],

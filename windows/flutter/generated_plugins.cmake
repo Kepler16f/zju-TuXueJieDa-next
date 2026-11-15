@@ -3,6 +3,8 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  awesome_notifications
+  local_notifier
   url_launcher_windows
   video_player_win
 )

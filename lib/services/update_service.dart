@@ -1,4 +1,7 @@
 import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'notification_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -61,6 +64,38 @@ class UpdateCheckResult {
   final String? message;
 }
 
+/// GitHub 产物下载镜像（前缀 + 完整原始 URL 的拼接方式）。
+/// 镜像站时效性强，列表允许后续在代码里增删。
+class DownloadMirror {
+  const DownloadMirror(this.label, this.prefix);
+
+  final String label;
+  final String prefix;
+}
+
+/// 一次后台下载任务的实时状态（进度/完成/失败）。
+class BackgroundDownloadState {
+  const BackgroundDownloadState({
+    required this.asset,
+    this.received = 0,
+    this.total = 0,
+    this.done = false,
+    this.failed = false,
+    this.cancelled = false,
+    this.path,
+    this.error,
+  });
+
+  final ReleaseAsset asset;
+  final int received;
+  final int total;
+  final bool done;
+  final bool failed;
+  final bool cancelled;
+  final String? path;
+  final String? error;
+}
+
 /// Checks GitHub Releases for `Kepler16f/zju-TuXueJieDa-next` and downloads
 /// matching platform installers on Windows, Android, and Linux.
 class UpdateService {
@@ -82,7 +117,66 @@ class UpdateService {
   static const String releasesPageUrl =
       'https://github.com/$repoOwner/$repoName/releases';
 
+  /// 下载镜像（国内直连 GitHub 产物缓慢）。默认启用镜像加速。
+  static const List<DownloadMirror> downloadMirrors = [
+    DownloadMirror('官方 GitHub（直连）', ''),
+    DownloadMirror('GHProxy 镜像', 'https://mirror.ghproxy.com/'),
+    DownloadMirror('GH-Proxy 镜像', 'https://gh-proxy.com/'),
+    DownloadMirror('GHFast 镜像', 'https://ghfast.top/'),
+  ];
+  static const _prefUseMirror = 'update_use_mirror';
+  static const _prefMirrorIndex = 'update_mirror_index';
+
   final Dio _dio;
+
+  /// 后台下载任务的实时状态；null = 没有进行中/刚完成的任务。
+  final ValueNotifier<BackgroundDownloadState?> backgroundDownload =
+      ValueNotifier(null);
+
+  CancelToken? _backgroundToken;
+
+  /// 当前生效的镜像（读取持久化设置；默认启用第一个镜像加速）。
+  Future<DownloadMirror> resolveMirror() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final use = prefs.getBool(_prefUseMirror) ?? true;
+      final index = prefs.getInt(_prefMirrorIndex) ?? 1;
+      if (!use) return downloadMirrors.first;
+      if (index < 0 || index >= downloadMirrors.length) {
+        return downloadMirrors.first;
+      }
+      return downloadMirrors[index];
+    } catch (_) {
+      return downloadMirrors.first;
+    }
+  }
+
+  /// 读取镜像设置的原始值（设置页 UI 用；resolveMirror 返回的是生效镜像）。
+  Future<({bool useMirror, int mirrorIndex})> loadMirrorSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final use = prefs.getBool(_prefUseMirror) ?? true;
+      var index = prefs.getInt(_prefMirrorIndex) ?? 1;
+      if (index < 0 || index >= downloadMirrors.length) index = 1;
+      return (useMirror: use, mirrorIndex: index);
+    } catch (_) {
+      return (useMirror: true, mirrorIndex: 1);
+    }
+  }
+
+  /// 持久化镜像设置（设置页调用）。
+  Future<void> setMirrorSettings({required bool useMirror, required int index}) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_prefUseMirror, useMirror);
+    await prefs.setInt(_prefMirrorIndex, index);
+  }
+
+  /// 给 GitHub 产物 URL 套上当前镜像前缀。
+  Future<String> applyMirror(String url) async {
+    final mirror = await resolveMirror();
+    if (mirror.prefix.isEmpty || url.startsWith(mirror.prefix)) return url;
+    return mirror.prefix + url;
+  }
 
   Future<String> getCurrentVersion() async {
     try {
@@ -191,16 +285,93 @@ class UpdateService {
     ReleaseAsset asset, {
     required void Function(int received, int total) onProgress,
     CancelToken? cancelToken,
+    bool reportBackground = false,
   }) async {
     final savePath = await resolveUpdateDownloadPath(asset.name);
     await prepareTempDownloadFile(savePath);
+    final url = await applyMirror(asset.downloadUrl);
     await _dio.download(
-      asset.downloadUrl,
+      url,
       savePath,
       cancelToken: cancelToken,
-      onReceiveProgress: onProgress,
+      onReceiveProgress: (received, total) {
+        onProgress(received, total);
+        if (reportBackground) {
+          backgroundDownload.value = BackgroundDownloadState(
+            asset: asset,
+            received: received,
+            total: total > 0 ? total : asset.size,
+          );
+        }
+      },
     );
+    if (reportBackground) {
+      backgroundDownload.value = BackgroundDownloadState(
+        asset: asset,
+        received: asset.size,
+        total: asset.size,
+        done: true,
+        path: savePath,
+      );
+    }
     return savePath;
+  }
+
+  /// 后台下载：对话框关闭后任务继续；进度通过 [backgroundDownload] 广播，
+  /// 并刷新系统通知（Android 进度条 / Windows、macOS 完成通知）。
+  Future<void> startBackgroundDownload(ReleaseAsset asset) async {
+    await NotificationService.instance.ensurePermission();
+    backgroundDownload.value = BackgroundDownloadState(
+      asset: asset,
+      received: 0,
+      total: asset.size,
+    );
+    _backgroundToken = CancelToken();
+    final token = _backgroundToken!;
+    try {
+      final path = await downloadAsset(
+        asset,
+        onProgress: (_, _) {},
+        cancelToken: token,
+        reportBackground: true,
+      );
+      backgroundDownload.value = BackgroundDownloadState(
+        asset: asset,
+        received: asset.size,
+        total: asset.size,
+        done: true,
+        path: path,
+      );
+      NotificationService.instance.showDownloadCompleted(
+        name: asset.name,
+        path: path,
+      );
+    } catch (e) {
+      final prev = backgroundDownload.value;
+      final dioError = e is DioException ? e : null;
+      final cancelled = dioError != null && CancelToken.isCancel(dioError);
+      backgroundDownload.value = BackgroundDownloadState(
+        asset: asset,
+        received: prev?.received ?? 0,
+        total: prev?.total ?? asset.size,
+        cancelled: cancelled,
+        failed: !cancelled,
+        error: '$e',
+      );
+      if (cancelled) {
+        NotificationService.instance.dismissDownloadProgress();
+      } else {
+        NotificationService.instance.showDownloadFailed(message: '$e');
+      }
+    } finally {
+      _backgroundToken = null;
+    }
+  }
+
+  /// 取消后台下载。
+  void cancelBackgroundDownload() {
+    _backgroundToken?.cancel();
+    NotificationService.instance.dismissDownloadProgress();
   }
 
   Future<String?> launchDownloadedPackage(
