@@ -265,7 +265,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: linux-deb-${{ matrix.arch }}
-          path: tuxuejieda_Linux_*.deb
+          path: tuxuejieda_*.deb
           archive: false
           if-no-files-found: error
 
