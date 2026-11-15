@@ -191,10 +191,18 @@ class UpdateService {
     final target = await detectPlatformTarget();
     final currentVersion = await getCurrentVersion();
 
-    if (kIsWeb ||
-        (target.os != 'windows' &&
-            target.os != 'android' &&
-            target.os != 'linux')) {
+    if (kIsWeb) {
+      return UpdateCheckResult(
+        status: UpdateStatus.unsupportedPlatform,
+        currentVersion: currentVersion,
+        target: target,
+        message: '当前运行于 Web 端，网页部署后即自动加载最新版；如需下载桌面或移动端安装包，可点击下方“打开发布页”。',
+      );
+    }
+
+    if (target.os != 'windows' &&
+        target.os != 'android' &&
+        target.os != 'linux') {
       return UpdateCheckResult(
         status: UpdateStatus.unsupportedPlatform,
         currentVersion: currentVersion,

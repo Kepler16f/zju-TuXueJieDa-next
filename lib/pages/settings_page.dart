@@ -1,11 +1,9 @@
-import 'dart:io';
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/curriculum_repository.dart';
 import '../services/orientation_service.dart';
+import '../services/platform_caps.dart';
 import '../services/update_service.dart';
 import '../services/window_channel.dart';
 import '../widgets/update_dialog.dart';
@@ -32,22 +30,11 @@ class _SettingsPageState extends State<SettingsPage> {
 
   String _appVersion = '';
 
-  bool get _isWindows => !kIsWeb && Platform.isWindows;
-  bool get _isAndroid => !kIsWeb && Platform.isAndroid;
-  bool get _isIOS => !kIsWeb && Platform.isIOS;
-
-  /// 鸿蒙：OHOS fork 的 dart:io 平台串可能是 ohos，或系统版本串含 OpenHarmony。
-  bool get _isOhos {
-    if (kIsWeb) return false;
-    try {
-      if (Platform.operatingSystem == 'ohos') return true;
-      return Platform.operatingSystemVersion
-          .toLowerCase()
-          .contains('openharmony');
-    } catch (_) {
-      return false;
-    }
-  }
+  bool get _isWindows => PlatformCaps.isWindows;
+  bool get _isAndroid => PlatformCaps.isAndroid;
+  bool get _isIOS => PlatformCaps.isIOS;
+  bool get _isOhos => PlatformCaps.isOhos;
+  bool get _isWeb => PlatformCaps.isWeb;
 
   /// 镜像下载设置（异步加载后落到本地状态）。
   bool _mirrorUse = true;
@@ -346,10 +333,15 @@ class _SettingsPageState extends State<SettingsPage> {
                               context,
                               service: widget.updateService,
                             ),
-                            icon: const Icon(Icons.system_update_alt_rounded, size: 18),
-                            label: const Text('检查更新'),
+                            icon: Icon(
+                              _isWeb
+                                  ? Icons.cloud_done_outlined
+                                  : Icons.system_update_alt_rounded,
+                              size: 18,
+                            ),
+                            label: Text(_isWeb ? '查看最新版本 / 客户端下载' : '检查更新'),
                           ),
-                        if (!_isIOS && !_isOhos) ...[
+                        if (!_isWeb && !_isIOS && !_isOhos) ...[
                           const SizedBox(height: 4),
                           SwitchListTile(
                             contentPadding: EdgeInsets.zero,

@@ -1,11 +1,9 @@
-import 'dart:io';
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/curriculum_repository.dart';
 import '../services/orientation_service.dart';
+import '../services/platform_caps.dart';
 import '../services/update_service.dart';
 import '../services/window_channel.dart';
 import 'home_page.dart';
@@ -41,7 +39,7 @@ class _AppShellState extends State<AppShell> {
     // Android full-screen edge-to-edge: content extends behind the status and
     // navigation bars (overlay colors are pinned in build via AnnotatedRegion).
     // Other platforms ignore this call, so it is guarded explicitly.
-    if (!kIsWeb && Platform.isAndroid) {
+    if (PlatformCaps.isAndroid) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     }
     widget.repo.addListener(_maybeApplyPlatformPrefs);
@@ -64,10 +62,10 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _applyPlatformPrefs() async {
-    if (kIsWeb) return;
-    if (Platform.isWindows) {
+    if (PlatformCaps.isWeb) return;
+    if (PlatformCaps.isWindows) {
       await WindowChannel.setCloseToTray(widget.repo.closeToTray);
-    } else if (Platform.isAndroid) {
+    } else if (PlatformCaps.isAndroid) {
       await OrientationService.apply(followSensor: widget.repo.followSensor);
     }
   }

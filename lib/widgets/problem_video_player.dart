@@ -121,6 +121,10 @@ class _ProblemVideoPlayerState extends State<ProblemVideoPlayer> {
       await ctrl.initialize();
       await ctrl.setLooping(_looping);
       await ctrl.setPlaybackSpeed(_speed);
+      // 浏览器策略禁止有声视频自动播放；本项目 MP4 均无音轨，显式静音以确保 Web 自动播放不被拦截。
+      if (kIsWeb) {
+        await ctrl.setVolume(0);
+      }
       await ctrl.play();
     } catch (e) {
       if (!mounted || _controller != ctrl) return;

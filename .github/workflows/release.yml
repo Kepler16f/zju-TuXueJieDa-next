@@ -27,6 +27,7 @@ on:
           - linux
           - ios
           - ohos
+          - web
       ref:
         description: '构建的代码引用（留空 = main；补发历史版本填 tag）'
         required: false
@@ -387,17 +388,47 @@ jobs:
           archive: false
           if-no-files-found: error
 
+  web:
+    name: Web bundle (CanvasKit + Wasm)
+    needs: test
+    if: ${{ inputs.targets == 'all' || inputs.targets == 'web' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || 'main' }}
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.9
+          cache: true
+      - run: |
+          sed -i "s/^version: .*/version: ${{ inputs.version }}+${{ inputs.build_number }}/" pubspec.yaml
+          flutter pub get
+          flutter build web --release --wasm --build-name=${{ inputs.version }} --build-number=${{ inputs.build_number }}
+      - name: Package Web zip
+        run: |
+          cd build/web
+          zip -qry "../../tuxuejieda-Web-${{ inputs.version }}.zip" .
+      - uses: actions/upload-artifact@v7
+        with:
+          name: web-bundle
+          path: tuxuejieda-Web-*.zip
+          archive: false
+          if-no-files-found: error
+
   release:
     name: Publish GitHub Release
-    needs: [android, windows, macos, linux, ios, ohos]
+    needs: [android, windows, macos, linux, ios, ohos, web]
     if: >-
       ${{ always() && inputs.create_release &&
-          needs.windows.result == 'success' &&
+          (needs.windows.result == 'success' || needs.windows.result == 'skipped') &&
           (needs.android.result == 'success' || needs.android.result == 'skipped') &&
           (needs.macos.result == 'success' || needs.macos.result == 'skipped') &&
           (needs.linux.result == 'success' || needs.linux.result == 'skipped') &&
           (needs.ios.result == 'success' || needs.ios.result == 'skipped') &&
-          (needs.ohos.result == 'success' || needs.ohos.result == 'skipped') }}
+          (needs.ohos.result == 'success' || needs.ohos.result == 'skipped') &&
+          (needs.web.result == 'success' || needs.web.result == 'skipped') }}
     runs-on: ubuntu-latest
     steps:
       - name: Download build artifacts
@@ -411,7 +442,7 @@ jobs:
         run: |
           cd stage
           files=()
-          for f in *.apk *.exe *.dmg *.deb *.hap; do [ -e "$f" ] && files+=("$f"); done
+          for f in *.apk *.exe *.dmg *.deb *.hap *.ipa *.zip; do [ -e "$f" ] && files+=("$f"); done
           sha256sum "${files[@]}" > SHA256SUMS.txt
       - name: Publish release (gh CLI)
         env:

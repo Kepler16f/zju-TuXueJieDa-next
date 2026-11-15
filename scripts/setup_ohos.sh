@@ -23,55 +23,84 @@ sed -i -E "s/\"bundleName\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"bundleName\": \
 # 版本号（用户在 Release 里看到的 versionName）
 sed -i -E "s/\"versionName\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"versionName\": \"$OHOS_APP_VERSION\"/" ohos/AppScope/app.json5
 
-# 应用名：launcher 显示名来自 entry 模块的 EntryAbility_label（此前是英文默认值）
-ENTRY_STR="ohos/entry/src/main/resources/base/element/string.json"
-if [ -f "$ENTRY_STR" ] && python3 -c "import sys" 2>/dev/null; then
-  python3 - "$ENTRY_STR" <<'PY'
-import json, io, sys
-p = sys.argv[1]
-with io.open(p, encoding="utf-8") as f:
-    data = json.load(f)
-for item in data.get("string", []):
-    if item.get("name") == "EntryAbility_label":
-        item["value"] = "图学习题解答"
-with io.open(p, "w", encoding="utf-8") as f:
-    json.dump(data, f, ensure_ascii=False, indent=2)
-print("entry label -> 图学习题解答")
-PY
-fi
-
-# 应用名（AppScope string 资源里的 app_name）
+# 应用名：launcher 显示名来自 entry 模块各语言目录下 string.json 中的 EntryAbility_label
+#（OpenHarmony/HarmonyOS 模板同时生成 base / zh_CN / en_US 三套资源，中文系统优先读取 zh_CN；
+# 仅改 base 会导致中文桌面仍然显示 Tuxuejieda_next。）
 python3 - <<'PY'
-import json, io, os
-p = "ohos/AppScope/resources/base/element/string.json"
-with io.open(p, encoding="utf-8") as f:
-    data = json.load(f)
-for item in data.get("string", []):
-    if item.get("name") == "app_name":
-        item["value"] = "图学习题解答"
-with io.open(p, "w", encoding="utf-8", newline="\n") as f:
-    json.dump(data, f, ensure_ascii=False, indent=2)
-print("app label -> 图学习题解答")
+import glob
+import io
+import json
+import os
+import re
+
+TARGET_LABEL = "图学习题解答"
+PATCH_KEYS = {"EntryAbility_label", "app_name", "ability_label"}
+
+# 1. 检查 module.json5 与 app.json5 的 label 引用（若写了字面量 tuxuejieda* 或自定义 $string key 一并纳管）
+for cfg_path, fallback_ref in [
+    ("ohos/AppScope/app.json5", "$string:app_name"),
+    ("ohos/entry/src/main/module.json5", "$string:EntryAbility_label"),
+]:
+    if not os.path.isfile(cfg_path):
+        continue
+    text = io.open(cfg_path, encoding="utf-8").read()
+    changed = False
+    for m in re.finditer(r'"label"\s*:\s*"([^"]+)"', text):
+        val = m.group(1)
+        if val.startswith("$string:"):
+            PATCH_KEYS.add(val.split(":", 1)[1])
+        elif val.lower().startswith("tuxuejieda"):
+            text = text.replace(f'"{val}"', f'"{fallback_ref}"')
+            changed = True
+    if changed:
+        io.open(cfg_path, "w", encoding="utf-8", newline="\n").write(text)
+        print(f"patched json5 label ref -> {cfg_path}")
+
+# 2. 统一更新 base / zh_CN / en_US 及其它所有区域目录下的 string.json
+string_files = sorted(
+    glob.glob("ohos/AppScope/resources/**/element/string.json", recursive=True)
+    + glob.glob("ohos/entry/src/main/resources/**/element/string.json", recursive=True)
+)
+for p in string_files:
+    with io.open(p, encoding="utf-8") as f:
+        data = json.load(f)
+    items = data.get("string", [])
+    seen_entry_label = False
+    for item in items:
+        nm = item.get("name", "")
+        val = str(item.get("value", ""))
+        if nm == "EntryAbility_label":
+            seen_entry_label = True
+        if nm in PATCH_KEYS or val.lower().startswith("tuxuejieda"):
+            item["value"] = TARGET_LABEL
+    if not seen_entry_label and "entry/src/main/resources" in p.replace("\\", "/"):
+        items.append({"name": "EntryAbility_label", "value": TARGET_LABEL})
+    data["string"] = items
+    with io.open(p, "w", encoding="utf-8", newline="\n") as f:
+        f.write(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+    print(f"label -> {TARGET_LABEL} in {p}")
 PY
 
-# 图标：launcher 实际读取的是 entry 模块的 icon.png；AppScope 分层图标一并覆盖
+# 图标：覆盖 AppScope 与 entry 下所有区域 media 目录
 ICON="$PWD/tools/app_icon_master.png"
-ICON_DIRS="ohos/entry/src/main/resources/base/media ohos/AppScope/resources/base/media"
 if [ -f "$ICON" ] && python3 -c "import PIL" 2>/dev/null; then
-  for MEDIA_DIR in $ICON_DIRS; do
-    [ -d "$MEDIA_DIR" ] || continue
-    python3 - "$ICON" "$MEDIA_DIR" <<'PY'
-import sys, os
+  python3 - "$ICON" <<'PY'
+import glob, os, sys
 from PIL import Image
-icon, media = sys.argv[1], sys.argv[2]
+
+icon = sys.argv[1]
 im = Image.open(icon).convert("RGBA")
-for fn in os.listdir(media):
-    if fn.endswith(".png"):
-        Image.open(os.path.join(media, fn)).close()
-        im.resize((512, 512), Image.LANCZOS).save(os.path.join(media, fn))
-        print("icon ->", fn)
+media_dirs = sorted(
+    glob.glob("ohos/entry/src/main/resources/*/media")
+    + glob.glob("ohos/AppScope/resources/*/media")
+)
+for media in media_dirs:
+    for fn in sorted(os.listdir(media)):
+        if fn.endswith(".png"):
+            p = os.path.join(media, fn)
+            im.resize((512, 512), Image.LANCZOS).save(p)
+            print("icon ->", p)
 PY
-  done
 fi
 
 # 插件切换到 SIG ohos 适配（pub get 之后其它平台构建不受影响：本文件不提交）

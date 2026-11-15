@@ -1,12 +1,12 @@
 {
-    "name": "tuxuejieda_next",
-    "short_name": "tuxuejieda_next",
+    "name": "图学基础教程习题解答",
+    "short_name": "图学习题解答",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#F6F8FB",
+    "theme_color": "#1F4E8C",
+    "description": "浙江大学《图学基础教程》177 道习题原题、分步图解与动画演示（非官方重制）",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {
