@@ -233,11 +233,39 @@ jobs:
           sed -i "s/^version: .*/version: ${{ inputs.version }}+${{ inputs.build_number }}/" pubspec.yaml
           flutter pub get
           flutter build linux --release
-      - run: tar czf "tuxuejieda-Linux-${{ matrix.arch }}-${{ inputs.version }}.tar.gz" -C build/linux/${{ matrix.arch }}/release/bundle .
+      - name: Build deb package
+        run: |
+          VER="${{ inputs.version }}"
+          case "${{ matrix.arch }}" in
+            x64)   DEB_ARCH="amd64" ;;
+            arm64) DEB_ARCH="arm64" ;;
+          esac
+          DEB_DIR="tuxuejieda_${VER}_${DEB_ARCH}"
+          mkdir -p "$DEB_DIR/DEBIAN" "$DEB_DIR/opt/tuxuejieda" "$DEB_DIR/usr/bin" \
+            "$DEB_DIR/usr/share/applications" "$DEB_DIR/usr/share/icons/hicolor/512x512/apps"
+          cp -r build/linux/${{ matrix.arch }}/release/bundle/* "$DEB_DIR/opt/tuxuejieda/"
+          ln -sf /opt/tuxuejieda/tuxuejieda_next "$DEB_DIR/usr/bin/tuxuejieda"
+          cp linux/app_icon_512.png "$DEB_DIR/usr/share/icons/hicolor/512x512/apps/tuxuejieda.png"
+          cat > "$DEB_DIR/usr/share/applications/tuxuejieda.desktop" <<DESKTOP
+          [Desktop Entry]
+          Type=Application
+          Name=图学基础教程习题解答
+          Exec=/opt/tuxuejieda/tuxuejieda_next
+          Icon=tuxuejieda
+          Categories=Education;Science;
+          DESKTOP
+          cat > "$DEB_DIR/DEBIAN/control" <<CONTROL
+          Package: tuxuejieda
+          Version: $VER
+          Architecture: $DEB_ARCH
+          Maintainer: Kepler16f
+          Description: 图学基础教程习题解答 - 工程图学习题的数字化解答课件
+          CONTROL
+          dpkg-deb --build "$DEB_DIR"
       - uses: actions/upload-artifact@v7
         with:
-          name: linux-bundle-${{ matrix.arch }}
-          path: tuxuejieda-Linux-*.tar.gz
+          name: linux-deb-${{ matrix.arch }}
+          path: tuxuejieda_Linux_*.deb
           archive: false
           if-no-files-found: error
 
@@ -359,14 +387,14 @@ jobs:
       - name: Download build artifacts
         uses: actions/download-artifact@v7
         with:
-          pattern: "{android-apk-*,windows-installer-*,macos-app,linux-bundle-*,ios-ipa,ohos-hap}"
+          pattern: "{android-apk-*,windows-installer-*,macos-app,linux-deb-*,ios-ipa,ohos-hap}"
           path: stage
           merge-multiple: true
       - name: Checksums
         run: |
           cd stage
           files=()
-          for f in *.apk *.exe *.zip *.tar.gz *.hap; do [ -e "$f" ] && files+=("$f"); done
+          for f in *.apk *.exe *.zip *.deb *.hap; do [ -e "$f" ] && files+=("$f"); done
           sha256sum "${files[@]}" > SHA256SUMS.txt
       - name: Publish release (gh CLI)
         env:
@@ -391,7 +419,7 @@ jobs:
             echo "- Android APK 为 debug 签名供侧载，应用名「图学习题解答」"
             echo "- macOS 应用未签名：首次打开需右键 → 打开，或执行 xattr -cr"
             echo "- iOS IPA 未签名：需自签（AltStore/Sideloadly/TrollStore 等）后安装"
-            echo "- Linux 包为 x64/arm64 便携 bundle（视频播放暂未支持）"
+            echo "- Linux 为 deb 包（x64/amd64 与 arm64），安装后从应用菜单启动；视频播放暂未支持"
             echo "- 鸿蒙 HAP 未签名：需 DevEco Studio 签名后安装"
             echo "- SHA256SUMS.txt 为上述产物的校验和"
             echo "- 非官方学生重制项目，仅供个人学习交流；原内容版权归原出版方所有。"
