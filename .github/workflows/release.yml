@@ -398,7 +398,8 @@ jobs:
       - name: Download build artifacts
         uses: actions/download-artifact@v7
         with:
-          pattern: "{android-apk-*,windows-installer-*,macos-app,linux-deb-*,ios-ipa,ohos-hap}"
+          # v7 archive:false 的 artifact 名 = 上传文件名（name 参数被忽略）
+          pattern: "tuxuejieda-*"
           path: stage
           merge-multiple: true
       - name: Checksums
