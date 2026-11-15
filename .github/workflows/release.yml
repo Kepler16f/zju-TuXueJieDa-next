@@ -344,8 +344,19 @@ jobs:
           OHOS_APP_VERSION: ${{ inputs.version }}
         run: |
           python3 -m pip install --quiet --disable-pip-version-check pillow
-          bash scripts/setup_ohos.sh
-          flutter pub get
+          # gitee 会限流/断流：init + pub get 整体重试（Helechron 同款模式）
+          for attempt in 1 2 3 4 5; do
+            rm -rf ohos pubspec_overrides.yaml
+            if bash scripts/setup_ohos.sh && flutter pub get; then
+              echo "ohos init attempt $attempt ok"
+              exit 0
+            fi
+            echo "::warning::ohos init failed on attempt $attempt (gitee flaky), retrying in 30s..."
+            rm -rf ohos pubspec_overrides.yaml pubspec.lock
+            sleep 30
+          done
+          echo "::error::ohos init failed after 5 attempts"
+          exit 1
       - name: Build HAP (unsigned fallback)
         run: |
           set +e
