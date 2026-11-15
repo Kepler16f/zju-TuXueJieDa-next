@@ -311,6 +311,7 @@ jobs:
     needs: test
     if: ${{ inputs.targets == 'all' || inputs.targets == 'ohos' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     env:
       FLUTTER_OHOS_REPO: https://gitcode.com/openharmony-tpc/flutter_flutter.git
       FLUTTER_OHOS_REF: oh-3.47.9-dev
@@ -345,21 +346,32 @@ jobs:
         run: |
           echo "registry=https://repo.huaweicloud.com/repository/npm/" > ~/.npmrc
           echo "@ohos:registry=https://repo.harmonyos.com/npm/" >> ~/.npmrc
+      - name: Cache OHOS pub git overrides
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache/git
+          key: ohos-pub-git-v1-${{ hashFiles('scripts/setup_ohos.sh') }}
+          restore-keys: ohos-pub-git-v1-
       - name: Init OHOS host project + plugin overlay
         env:
           OHOS_APP_VERSION: ${{ inputs.version }}
+          OHOS_BUILD_NUMBER: ${{ inputs.build_number }}
+          GIT_TERMINAL_PROMPT: "0"
         run: |
           python3 -m pip install --quiet --disable-pip-version-check pillow
-          # gitee 会限流/断流：init + pub get 整体重试（Helechron 同款模式）
+          git config --global http.lowSpeedLimit 1024
+          git config --global http.lowSpeedTime 25
+          git config --global http.postBuffer 524288000
+          # gitee 会限流/断流/卡死 TCP：配置低速超时 + 每次限时 240s 整体重试
           for attempt in 1 2 3 4 5; do
             rm -rf ohos pubspec_overrides.yaml
-            if bash scripts/setup_ohos.sh && flutter pub get; then
+            if timeout 240 bash -c 'bash scripts/setup_ohos.sh && flutter pub get'; then
               echo "ohos init attempt $attempt ok"
               exit 0
             fi
-            echo "::warning::ohos init failed on attempt $attempt (gitee flaky), retrying in 30s..."
+            echo "::warning::ohos init failed/timed out on attempt $attempt (gitee flaky), retrying in 10s..."
             rm -rf ohos pubspec_overrides.yaml pubspec.lock
-            sleep 30
+            sleep 10
           done
           echo "::error::ohos init failed after 5 attempts"
           exit 1

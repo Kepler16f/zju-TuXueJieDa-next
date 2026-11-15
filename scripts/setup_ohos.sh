@@ -10,9 +10,10 @@ cd "$(dirname "$0")/.."
 VERSION_LABEL="图学习题解答"
 BUNDLE_ID="com.kepler16f.tuxuejieda"
 OHOS_APP_VERSION="${OHOS_APP_VERSION:-0.0.0}"
+OHOS_BUILD_NUMBER="${OHOS_BUILD_NUMBER:-1}"
 
-# 版本号同步进 pubspec（flutter create 生成 app.json5 的 versionName 取自它）
-sed -i -E "s/^version: .*/version: $OHOS_APP_VERSION/" pubspec.yaml
+# 版本号同步进 pubspec（flutter create 生成 app.json5 的 versionName / versionCode 取自它）
+sed -i -E "s/^version: .*/version: ${OHOS_APP_VERSION}+${OHOS_BUILD_NUMBER}/" pubspec.yaml
 
 if [ ! -d ohos ]; then
   flutter create --platforms ohos --project-name tuxuejieda_next .
@@ -20,8 +21,9 @@ fi
 
 # bundleName 指向本项目域名
 sed -i -E "s/\"bundleName\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"bundleName\": \"$BUNDLE_ID\"/" ohos/AppScope/app.json5
-# 版本号（用户在 Release 里看到的 versionName）
+# 版本号与构建号（用户在 Release / 系统应用信息里看到的 versionName / versionCode）
 sed -i -E "s/\"versionName\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"versionName\": \"$OHOS_APP_VERSION\"/" ohos/AppScope/app.json5
+sed -i -E "s/\"versionCode\"[[:space:]]*:[[:space:]]*[0-9]+/\"versionCode\": $OHOS_BUILD_NUMBER/" ohos/AppScope/app.json5
 
 # 应用名：launcher 显示名来自 entry 模块各语言目录下 string.json 中的 EntryAbility_label
 #（OpenHarmony/HarmonyOS 模板同时生成 base / zh_CN / en_US 三套资源，中文系统优先读取 zh_CN；
