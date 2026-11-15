@@ -201,48 +201,6 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
                           ),
                         )
                       : null,
-                  endDrawer: !isDesktop
-                      ? Drawer(
-                          child: SafeArea(
-                            bottom: false,
-                            child: Column(
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.fromLTRB(16, 10, 8, 6),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          '题目详情与便签',
-                                          style: theme.textTheme.titleMedium
-                                              ?.copyWith(fontWeight: FontWeight.w700),
-                                        ),
-                                      ),
-                                      IconButton(
-                                        tooltip: '收起详情面板',
-                                        icon: const Icon(Icons.close_rounded),
-                                        onPressed: () => Navigator.of(context).pop(),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Expanded(
-                                  child: _ProblemDetailPanel(
-                                    problem: _problem,
-                                    activeStep: (_effectiveTab == WorkspaceTab.jieti &&
-                                            _stepIdx < _problem.steps.length)
-                                        ? _problem.steps[_stepIdx]
-                                        : null,
-                                    repo: widget.repo,
-                                    onCopy: _copyText,
-                                    noteEditorInDialog: !isDesktop,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
-                      : null,
                   appBar: AppBar(
                     titleSpacing: 8,
                     leading: IconButton(
@@ -339,9 +297,15 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
                         ),
                       ] else
                         IconButton(
-                          tooltip: '题目详情与便签',
-                          icon: const Icon(Icons.description_rounded),
-                          onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
+                          tooltip: widget.repo.noteFor(_problem.id).trim().isNotEmpty
+                              ? '编辑便签'
+                              : '添加便签',
+                          icon: Icon(
+                            widget.repo.noteFor(_problem.id).trim().isNotEmpty
+                                ? Icons.sticky_note_2_rounded
+                                : Icons.sticky_note_2_outlined,
+                          ),
+                          onPressed: _openNoteSheet,
                         ),
                       const SizedBox(width: 4),
                     ],
@@ -404,6 +368,74 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
         );
       },
     );
+  }
+
+  /// 竖屏/窄屏：便签通过底部弹出的输入弹窗添加/编辑（保存即持久化）。
+  Future<void> _openNoteSheet() async {
+    final hasNote = widget.repo.noteFor(_problem.id).trim().isNotEmpty;
+    final controller = TextEditingController(text: widget.repo.noteFor(_problem.id));
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          16, 16, 16,
+          16 + MediaQuery.of(sheetContext).viewInsets.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.sticky_note_2_outlined, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  hasNote ? '编辑便签' : '添加便签',
+                  style: Theme.of(sheetContext).textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              minLines: 5,
+              maxLines: 12,
+              textInputAction: TextInputAction.newline,
+              decoration: const InputDecoration(
+                hintText: '在这里写你的解题心得/易错点…',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                OutlinedButton(
+                  onPressed: () {
+                    controller.clear();
+                  },
+                  child: const Text('清空'),
+                ),
+                const Spacer(),
+                FilledButton.icon(
+                  onPressed: () => Navigator.of(sheetContext).pop(true),
+                  icon: const Icon(Icons.check_rounded, size: 16),
+                  label: const Text('保存'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+    final text = controller.text;
+    controller.dispose();
+    if (saved == true) {
+      await widget.repo.setNote(_problem.id, text);
+      if (mounted) setState(() {});
+    }
   }
 
   /// 竖屏/窄屏：把题干直接并入主界面（图片上方），替代抽屉里的"题目要求"。

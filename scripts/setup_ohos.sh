@@ -23,6 +23,24 @@ sed -i -E "s/\"bundleName\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"bundleName\": \
 # 版本号（用户在 Release 里看到的 versionName）
 sed -i -E "s/\"versionName\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"versionName\": \"$OHOS_APP_VERSION\"/" ohos/AppScope/app.json5
 
+# 应用名：launcher 显示名来自 entry 模块的 EntryAbility_label（此前是英文默认值）
+ENTRY_STR="ohos/entry/src/main/resources/base/element/string.json"
+if [ -f "$ENTRY_STR" ] && python3 -c "import sys" 2>/dev/null; then
+  python3 - "$ENTRY_STR" <<'PY'
+import json, io, sys
+p = sys.argv[1]
+with io.open(p, encoding="utf-8") as f:
+    data = json.load(f)
+for item in data.get("string", []):
+    if item.get("name") == "EntryAbility_label":
+        item["value"] = "图学习题解答"
+with io.open(p, "w", encoding="utf-8", newline="
+") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
+print("entry label -> 图学习题解答")
+PY
+fi
+
 # 应用名（AppScope string 资源里的 app_name）
 python3 - <<'PY'
 import json, io, os

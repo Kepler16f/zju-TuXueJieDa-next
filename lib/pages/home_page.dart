@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
 import '../data/curriculum_repository.dart';
 import '../models/curriculum.dart';
@@ -398,29 +399,25 @@ class _HomePageState extends State<HomePage> {
                     16, 4, 16,
                     math.max(24.0, MediaQuery.paddingOf(context).bottom),
                   ),
-                  sliver: SliverGrid(
-                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                      maxCrossAxisExtent: 390,
-                      mainAxisExtent: 172,
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                    ),
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final problem = filtered[index];
-                        final ch = curriculum.chapterById(problem.chapterId);
-                        return _ProblemCard(
-                          problem: problem,
-                          chapterTitle: ch.title,
-                          done: repo.isCompleted(problem.id),
-                          bookmarked: repo.isBookmarked(problem.id),
-                          onTap: () => _openProblem(curriculum, problem),
-                          onToggleDone: () => repo.toggleCompleted(problem.id),
-                          onToggleBookmark: () => repo.toggleBookmarked(problem.id),
-                        );
-                      },
-                      childCount: filtered.length,
-                    ),
+                  // 瀑布流：卡片高度随题干动态；列数随屏宽（窄屏单列）。
+                  sliver: SliverMasonryGrid.extent(
+                    maxCrossAxisExtent: 390,
+                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 10,
+                    childCount: filtered.length,
+                    itemBuilder: (context, index) {
+                      final problem = filtered[index];
+                      final ch = curriculum.chapterById(problem.chapterId);
+                      return _ProblemCard(
+                        problem: problem,
+                        chapterTitle: ch.title,
+                        done: repo.isCompleted(problem.id),
+                        bookmarked: repo.isBookmarked(problem.id),
+                        onTap: () => _openProblem(curriculum, problem),
+                        onToggleDone: () => repo.toggleCompleted(problem.id),
+                        onToggleBookmark: () => repo.toggleBookmarked(problem.id),
+                      );
+                    },
                   ),
                 ),
             ],
@@ -662,12 +659,14 @@ class _ProblemCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 6),
-              Expanded(
-                child: _OverflowScrollText(
-                  text: problem.statement.isNotEmpty
+              Padding(
+                padding: const EdgeInsets.only(top: 2, bottom: 4),
+                child: Text(
+                  problem.statement.isNotEmpty
                       ? problem.statement.replaceAll('\n', ' ')
                       : '点击查看原题图形、分步详解与标准答案',
                   style: theme.textTheme.bodySmall?.copyWith(height: 1.35),
+                  softWrap: true,
                 ),
               ),
               const SizedBox(height: 4),
@@ -852,34 +851,6 @@ class _MiniTag extends StatelessWidget {
           Text(label, style: TextStyle(fontSize: 11, color: fg, fontWeight: FontWeight.w500)),
         ],
       ),
-    );
-  }
-}
-
-/// 卡片内题干：内容不超框时按普通文本展示（全局滑动不受影响），
-/// 溢出时才启用内部滚动，供用户查看完整题干。
-class _OverflowScrollText extends StatelessWidget {
-  const _OverflowScrollText({required this.text, required this.style});
-
-  final String text;
-  final TextStyle? style;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final painter = TextPainter(
-          text: TextSpan(text: text, style: style),
-          textDirection: TextDirection.ltr,
-        )..layout(maxWidth: constraints.maxWidth);
-        final overflows = painter.height > constraints.maxHeight + 0.5;
-        if (!overflows) {
-          return Text(text, style: style);
-        }
-        return SingleChildScrollView(
-          child: Text(text, style: style),
-        );
-      },
     );
   }
 }
