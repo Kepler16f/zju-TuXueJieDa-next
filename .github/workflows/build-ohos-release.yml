@@ -106,20 +106,38 @@ jobs:
           java -jar "$SIGN_JAR" sign-app -mode localSign -keyAlias tuxuejieda -keyPwd "$KS_PASS" -signAlg SHA256withECDSA -keystoreFile signing/ohos_release.p12 -keystorePwd "$KS_PASS" -appCertFile signing/chain.cer -profileFile signing/app.p7b -profileSigned 1 -compatibleVersion 12 -inFile "$HAP" -outFile signed/entry-default-signed.hap
           java -jar "$SIGN_JAR" verify-app -inFile signed/entry-default-signed.hap -outCertChain signed/cert-chain.cer -outProfile signed/profile.p7b
           ls -la signed/
+      - name: Locate packing tool
+        run: |
+          PACK_TOOL=$(find /home/runner/ohos-sdk -maxdepth 8 -type f -name 'app_packing_tool.jar' | head -1)
+          echo "pack tool: $PACK_TOOL"
+          if [ -z "$PACK_TOOL" ]; then
+            echo "::error::app_packing_tool.jar not found"
+            find /home/runner/ohos-sdk -name '*.jar' | head -30
+            exit 1
+          fi
+          echo "PACK_TOOL=$PACK_TOOL" >> "$GITHUB_ENV"
       - name: Assemble and sign .app
         env:
           KS_PASS: ${{ secrets.OHOS_KEYSTORE_PASSWORD }}
         run: |
           set -e
           SIGN_JAR=$(find /home/runner/ohos-sdk -iname "hap-sign-tool*.jar" -type f | head -1)
-          mkdir -p app
-          cp signed/entry-default-signed.hap app/entry-default-signed.hap
-          unzip -p signed/entry-default-signed.hap pack.info > app/pack.info
-          cd app
-          zip -qry ../unsigned.app .
-          cd ..
-          ls -la unsigned.app
-          java -jar "$SIGN_JAR" sign-app -mode localSign -keyAlias tuxuejieda -keyPwd "$KS_PASS" -signAlg SHA256withECDSA -keystoreFile signing/ohos_release.p12 -keystorePwd "$KS_PASS" -appCertFile signing/chain.cer -profileFile signing/app.p7b -profileSigned 1 -compatibleVersion 12 -inForm zip -inFile unsigned.app -outFile "tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app"
+          mkdir -p dist
+          # .app 内的 HAP 用标准名（pack.info 的 hapList 与之一致）
+          cp signed/entry-default-signed.hap dist/entry-default.hap
+          # pack.info 从签名 HAP 提取，并注入 hapList（AGC 靠它解析 .app，缺失会报 996）
+          unzip -p signed/entry-default-signed.hap pack.info > dist/pack.info
+          python3 scripts/patch_pack_info.py dist/pack.info entry-default.hap
+          # 官方 packing tool 打包 .app（不要手工 zip，AGC 会报包结构错误）
+          java -jar "$PACK_TOOL" --mode app \
+            --pack-info-path dist/pack.info \
+            --hap-path dist/entry-default.hap \
+            --out-path "dist/tuxuejieda-HarmonyOS-${{ inputs.version }}-unsigned.app" \
+            --replace-pack-info false --force true
+          ls -la dist/
+          # .app 外层签名：-inForm zip 按 App Pack 容器签名（AGC 991 的根因就是缺这层）
+          java -jar "$SIGN_JAR" sign-app -mode localSign -keyAlias tuxuejieda -keyPwd "$KS_PASS" -appCertFile signing/chain.cer -profileFile signing/app.p7b -inForm zip -signAlg SHA256withECDSA -keystoreFile signing/ohos_release.p12 -keystorePwd "$KS_PASS" -inFile "dist/tuxuejieda-HarmonyOS-${{ inputs.version }}-unsigned.app" -outFile "tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app"
+          java -jar "$SIGN_JAR" verify-app -inFile "tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app" -outCertChain signed/cert-chain.cer -outProfile signed/profile.p7b || true
           ls -la *.app
       - name: Pack .app into tar.gz (artifacts extract zips, which would drop the signature block)
         run: |
