@@ -105,7 +105,7 @@ jobs:
         env:
           KS_PASS: ${{ secrets.OHOS_KEYSTORE_PASSWORD }}
         run: |
-          python3 scripts/write_ohos_signing.py             --store signing/material/ohos_release.p12             --cert signing/material/app.cer             --profile signing/material/app.p7b             --alias tuxuejieda             --password "$KS_PASS"
+          python3 scripts/write_ohos_signing.py             --store signing/ohos_release.p12             --cert signing/app.cer             --profile signing/app.p7b             --alias tuxuejieda             --password "$KS_PASS"
           cat ohos/build-profile.json5
       - name: Build signed APP (hvigor, DevEco-equivalent)
         run: |
