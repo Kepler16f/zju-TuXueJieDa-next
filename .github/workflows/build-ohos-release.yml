@@ -121,10 +121,15 @@ jobs:
           ls -la unsigned.app
           java -jar "$SIGN_JAR" sign-app -mode localSign -keyAlias tuxuejieda -keyPwd "$KS_PASS" -signAlg SHA256withECDSA -keystoreFile signing/ohos_release.p12 -keystorePwd "$KS_PASS" -appCertFile signing/chain.cer -profileFile signing/app.p7b -profileSigned 1 -compatibleVersion 12 -inForm zip -inFile unsigned.app -outFile "tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app"
           ls -la *.app
+      - name: Pack .app into tar.gz (artifacts extract zips, which would drop the signature block)
+        run: |
+          set -e
+          tar czf "tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app.tar.gz"             "tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app"
+          ls -la *.tar.gz
       - uses: actions/upload-artifact@v7
         with:
           name: ohos-release-app
-          path: tuxuejieda-HarmonyOS-*-release.app
+          path: tuxuejieda-HarmonyOS-*-release.app.tar.gz
           archive: false
           if-no-files-found: error
       - name: Upload to AppGallery Connect
