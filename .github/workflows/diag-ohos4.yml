@@ -20,30 +20,5 @@ jobs:
         with:
           version: 26.0.0.821
           cache: true
-      - name: Dump signing schema
-        run: |
-          P=/home/runner/ohos-sdk/command-line-tools/hvigor/hvigor-ohos-plugin
-          echo "=== schema: signingConfigs section ==="
-          python3 - <<'PY'
-import json
-p = "/home/runner/ohos-sdk/command-line-tools/hvigor/hvigor-ohos-plugin/res/schemas/ohos-project-build-profile-schema.json"
-d = json.load(open(p, encoding="utf-8"))
-def find(node, path=""):
-    if isinstance(node, dict):
-        if "signingConfigs" in node:
-            print("PATH:", path)
-            print(json.dumps(node["signingConfigs"], ensure_ascii=False, indent=2)[:3000])
-        for k, v in node.items():
-            find(v, path + "/" + str(k))
-    elif isinstance(node, list):
-        for i, v in enumerate(node):
-            find(v, path + f"[{i}]")
-find(d)
-PY
-      - name: Dump sign command builder
-        run: |
-          P=/home/runner/ohos-sdk/command-line-tools/hvigor/hvigor-ohos-plugin
-          echo "=== common-sign-command-builder.js ==="
-          sed -n '1,140p' "$P/src/tasks/sign/command-builder-impl/common-sign-command-builder.js"
-          echo "=== sign-util.d.ts ==="
-          sed -n '1,120p' "$P/src/tasks/sign/sign-util.d.ts"
+      - name: Dump hvigor signing schema and sign builder
+        run: python3 scripts/dump_hvigor_signing_schema.py
