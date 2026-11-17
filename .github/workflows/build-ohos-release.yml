@@ -82,6 +82,7 @@ jobs:
       - name: Init OHOS host project
         env:
           OHOS_APP_VERSION: ${{ inputs.version }}
+          OHOS_BUILD_NUMBER: ${{ inputs.build_number }}
           OHOS_DEVELOPER: 胡天泽
         run: |
           python3 -m pip install --quiet --disable-pip-version-check pillow
@@ -126,7 +127,9 @@ jobs:
             -compatibleVersion 12 \
             -inFile signed/entry-default-signed.hap \
             -outFile signed/entry-release-signed.hap
-          java -jar "$SIGN_JAR" verify-app -inFile signed/entry-release-signed.hap || true
+          java -jar "$SIGN_JAR" verify-app \
+            -inFile signed/entry-release-signed.hap \
+            -outCertChain signed/cert-chain.cer
           ls -la signed/
       - name: Package .app
         run: |
@@ -136,7 +139,8 @@ jobs:
           cp signing/chain.cer app/
           cp signing/app.p7b app/
           cp ohos/AppScope/resources/base/element/string.json app/ 2>/dev/null || true
-          printf '%s\n' "{\"bundle\":{\"app\":{\"bundleName\":\"com.kepler16f.tuxuejieda\",\"version\":{\"code\":${{ inputs.build_number }},\"name\":\"${{ inputs.version }}\"}}}}" > app/pack.info
+          # pack.info 取自签名后的 HAP（华为工具生成的格式，AppGallery 校验最稳）
+          unzip -p signed/entry-release-signed.hap pack.info > app/pack.info
           cd app
           zip -qry "../tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app" .
           cd ..
