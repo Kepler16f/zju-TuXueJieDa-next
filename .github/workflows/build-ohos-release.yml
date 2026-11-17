@@ -75,7 +75,8 @@ jobs:
           set -e
           mkdir -p signing
           echo "$KS_B64" | base64 -d > signing/ohos_release.p12
-          echo "$CERT_B64" | base64 -d > signing/app.cer
+          # AGC 下载的 .cer 是完整证书链（根+中间+应用证书），签名工具要求链
+          echo "$CERT_B64" | base64 -d > signing/chain.cer
           echo "$PROFILE_B64" | base64 -d > signing/app.p7b
           ls -la signing/
       - name: Init OHOS host project
@@ -119,7 +120,7 @@ jobs:
             -signAlg SHA256withECDSA \
             -keystoreFile signing/ohos_release.p12 \
             -keystorePwd "$KS_PASS" \
-            -appCertFile signing/app.cer \
+            -appCertFile signing/chain.cer \
             -profileFile signing/app.p7b \
             -profileSigned 1 \
             -compatibleVersion 12 \
