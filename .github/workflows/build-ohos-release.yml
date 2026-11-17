@@ -133,7 +133,7 @@ jobs:
           set -e
           mkdir -p app
           cp signed/entry-release-signed.hap app/entry-default-signed.hap
-          cp signing/app.cer app/
+          cp signing/chain.cer app/
           cp signing/app.p7b app/
           cp ohos/AppScope/resources/base/element/string.json app/ 2>/dev/null || true
           printf '%s\n' "{\"bundle\":{\"app\":{\"bundleName\":\"com.kepler16f.tuxuejieda\",\"version\":{\"code\":${{ inputs.build_number }},\"name\":\"${{ inputs.version }}\"}}}}" > app/pack.info
