@@ -79,10 +79,6 @@ jobs:
           echo "$CERT_B64" | base64 -d > signing/chain.cer
           echo "$PROFILE_B64" | base64 -d > signing/app.p7b
           ls -la signing/
-      - name: Diagnose template (native project spec)
-        run: |
-          flutter create --platforms ohos --project-name tuxuejieda_next . >/dev/null 2>&1 || true
-          python3 scripts/dump_ohos_spec.py .
       - name: Init OHOS host project
         env:
           OHOS_APP_VERSION: ${{ inputs.version }}
@@ -100,54 +96,31 @@ jobs:
             sleep 30
           done
           exit 1
-      - name: Build unsigned HAP
-        run: |
-          set +e
-          flutter build hap --release --target-platform ohos-arm64
-          echo "flutter exit=$?"
-          set -e
-          find ohos -name '*.hap' -print
-      - name: Sign HAP
+      - name: Write hvigor signing config
         env:
           KS_PASS: ${{ secrets.OHOS_KEYSTORE_PASSWORD }}
         run: |
-          set -e
-          SIGN_JAR=$(find /home/runner/ohos-sdk -iname "hap-sign-tool*.jar" -type f | head -1)
-          echo "sign tool: $SIGN_JAR"
-          HAP=$(find ohos -name '*.hap' -type f | head -1)
-          if [ -z "$HAP" ]; then echo "::error::no hap produced"; exit 1; fi
-          mkdir -p signed
-          cp "$HAP" signed/entry-default-signed.hap
-          java -jar "$SIGN_JAR" sign-app \
-            -mode localSign \
-            -keyAlias tuxuejieda \
-            -keyPwd "$KS_PASS" \
-            -signAlg SHA256withECDSA \
-            -keystoreFile signing/ohos_release.p12 \
-            -keystorePwd "$KS_PASS" \
-            -appCertFile signing/chain.cer \
-            -profileFile signing/app.p7b \
-            -profileSigned 1 \
-            -compatibleVersion 12 \
-            -inFile signed/entry-default-signed.hap \
-            -outFile signed/entry-release-signed.hap
-          java -jar "$SIGN_JAR" verify-app \
-            -inFile signed/entry-release-signed.hap \
-            -outCertChain signed/cert-chain.cer \
-            -outProfile signed/profile.p7b
-          ls -la signed/
-      - name: Package .app
+          python3 scripts/write_ohos_signing.py             --store signing/ohos_release.p12             --cert signing/chain.cer             --profile signing/app.p7b             --alias tuxuejieda             --password "$KS_PASS"
+          cat ohos/build-profile.json5
+      - name: Build signed APP (hvigor, DevEco-equivalent)
         run: |
           set -e
-          mkdir -p app
-          cp signed/entry-release-signed.hap app/entry-default-signed.hap
-          # pack.info 取自签名后的 HAP（华为工具生成的格式，AppGallery 校验最稳）
-          unzip -p signed/entry-release-signed.hap pack.info > app/pack.info
-          # .app 只含 pack.info + 签名 HAP（华为规范结构），多余文件会导致
-          # 上传包结构校验失败。
-          cd app
-          zip -qry "../tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app" .
-          cd ..
+          # hvigor 用 build-profile.json5 里的签名配置同时签名 HAP 与 .app；
+          # 这是 DevEco Studio「Build APP(s)」的同一条路径，产物可直接上传 AGC。
+          flutter build app --release --target-platform ohos-arm64 \n            || flutter build app --release
+          echo "=== outputs ==="
+          find . -name "*.app" -o -name "*.hap" | head -20
+      - name: Upload signed APP
+        run: |
+          set -e
+          APPFILE=$(find . -name "*.app" -type f | head -1)
+          if [ -z "$APPFILE" ]; then
+            echo "::error::no .app produced"
+            find . -name "*.hap" | head -10
+            exit 1
+          fi
+          echo "app: $APPFILE"
+          cp "$APPFILE" "tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app"
           ls -la *.app
       - uses: actions/upload-artifact@v7
         with:
