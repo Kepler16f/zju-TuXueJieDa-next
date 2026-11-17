@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/curriculum_repository.dart';
+import '../services/consent_service.dart';
 import '../services/orientation_service.dart';
 import '../services/platform_caps.dart';
 import '../services/update_service.dart';
@@ -87,6 +88,52 @@ class _SettingsPageState extends State<SettingsPage> {
         SnackBar(content: Text('无法打开链接，请手动访问：$_repoUrl')),
       );
     }
+  }
+
+  Future<void> _openPolicy(String url) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final opened = await launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!opened) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('无法打开链接，请检查系统浏览器设置。')),
+        );
+      }
+    } catch (_) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('无法打开链接，请手动访问：$url')),
+      );
+    }
+  }
+
+  Future<void> _revokeConsent() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('撤回隐私授权'),
+        content: const Text('撤回后应用将在下次启动时重新显示隐私政策与用户协议授权页。'
+            '你的学习数据不会被删除。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('撤回'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await ConsentService().revoke();
+    messenger.showSnackBar(
+      const SnackBar(content: Text('已撤回授权，下次启动将重新显示授权页')),
+    );
   }
 
   Future<void> _clearWithConfirm({
@@ -421,6 +468,30 @@ class _SettingsPageState extends State<SettingsPage> {
                           subtitle: const Text('github.com/Kepler16f/zju-TuXueJieDa-next'),
                           trailing: const Icon(Icons.open_in_new_rounded, size: 18),
                           onTap: _openRepository,
+                        ),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          leading: const Icon(Icons.privacy_tip_outlined),
+                          title: const Text('隐私政策'),
+                          trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                          onTap: () => _openPolicy(ConsentService.privacyPolicyUrl),
+                        ),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          leading: const Icon(Icons.description_outlined),
+                          title: const Text('用户协议'),
+                          trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                          onTap: () => _openPolicy(ConsentService.userAgreementUrl),
+                        ),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          leading: const Icon(Icons.logout_rounded),
+                          title: const Text('撤回隐私授权'),
+                          subtitle: const Text('撤回后下次启动将重新显示授权页'),
+                          onTap: _revokeConsent,
                         ),
                         const SizedBox(height: 8),
                         Text(

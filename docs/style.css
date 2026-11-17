@@ -1,0 +1,103 @@
+:root {
+  color-scheme: light dark;
+  --fg: #1b1f24;
+  --bg: #ffffff;
+  --muted: #5b6470;
+  --accent: #1874d0;
+  --line: #e3e8ef;
+  --card: #f6f8fb;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fg: #e8ecf1;
+    --bg: #12161b;
+    --muted: #9aa5b1;
+    --accent: #4ea3f0;
+    --line: #263039;
+    --card: #171d24;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  line-height: 1.75;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 22px;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+}
+
+.bar .title { font-weight: 700; }
+.bar .home { color: var(--accent); text-decoration: none; }
+.bar .tag { margin-left: auto; color: var(--muted); font-size: 13px; }
+
+main {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 34px 22px 70px;
+}
+
+h1 { font-size: 27px; margin: 0 0 10px; }
+h2 { font-size: 19px; margin: 34px 0 10px; padding-top: 8px; }
+
+.lead { color: var(--muted); margin-bottom: 22px; }
+
+p, li { font-size: 15.5px; }
+
+a { color: var(--accent); }
+
+ul, ol { padding-left: 22px; }
+li { margin: 5px 0; }
+
+strong { font-weight: 700; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14px 0 6px;
+  font-size: 14px;
+}
+
+th, td {
+  border: 1px solid var(--line);
+  padding: 9px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+th { background: var(--card); font-weight: 600; }
+
+ul.links { list-style: none; padding: 0; margin: 12px 0 4px; }
+
+ul.links li {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 10px 0;
+  background: var(--card);
+}
+
+ul.links a { font-weight: 600; text-decoration: none; }
+ul.links span { display: block; color: var(--muted); font-size: 13.5px; }
+
+.foot {
+  margin-top: 44px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 13.5px;
+}
