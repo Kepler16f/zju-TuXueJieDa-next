@@ -79,6 +79,10 @@ jobs:
           echo "$CERT_B64" | base64 -d > signing/chain.cer
           echo "$PROFILE_B64" | base64 -d > signing/app.p7b
           ls -la signing/
+      - name: Diagnose template (native project spec)
+        run: |
+          flutter create --platforms ohos --project-name tuxuejieda_next . >/dev/null 2>&1 || true
+          python3 scripts/dump_ohos_spec.py .
       - name: Init OHOS host project
         env:
           OHOS_APP_VERSION: ${{ inputs.version }}
@@ -137,11 +141,10 @@ jobs:
           set -e
           mkdir -p app
           cp signed/entry-release-signed.hap app/entry-default-signed.hap
-          cp signing/chain.cer app/
-          cp signing/app.p7b app/
-          cp ohos/AppScope/resources/base/element/string.json app/ 2>/dev/null || true
           # pack.info 取自签名后的 HAP（华为工具生成的格式，AppGallery 校验最稳）
           unzip -p signed/entry-release-signed.hap pack.info > app/pack.info
+          # .app 只含 pack.info + 签名 HAP（华为规范结构），多余文件会导致
+          # 上传包结构校验失败。
           cd app
           zip -qry "../tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app" .
           cd ..

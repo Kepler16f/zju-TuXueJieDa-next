@@ -86,25 +86,40 @@ for p in string_files:
     print(f"label -> {TARGET_LABEL} in {p}")
 PY
 
-# 图标：覆盖 AppScope 与 entry 下所有区域 media 目录
+# 图标：覆盖 AppScope 与 entry 下各 media 目录的 png。
+# 关键：按原文件像素尺寸输出（华为按模板尺寸校验应用图标，统一缩到 512 会
+# 导致应用级图标不合规）；原文件尺寸超过 1024 时才收敛到 1024。
 ICON="$PWD/tools/app_icon_master.png"
 if [ -f "$ICON" ] && python3 -c "import PIL" 2>/dev/null; then
   python3 - "$ICON" <<'PY'
-import glob, os, sys
+import glob
+import os
+import sys
+
 from PIL import Image
 
 icon = sys.argv[1]
-im = Image.open(icon).convert("RGBA")
+master = Image.open(icon).convert("RGBA")
 media_dirs = sorted(
     glob.glob("ohos/entry/src/main/resources/*/media")
     + glob.glob("ohos/AppScope/resources/*/media")
 )
-for media in media_dirs:
-    for fn in sorted(os.listdir(media)):
-        if fn.endswith(".png"):
-            p = os.path.join(media, fn)
-            im.resize((512, 512), Image.LANCZOS).save(p)
-            print("icon ->", p)
+for d in media_dirs:
+    if not os.path.isdir(d):
+        continue
+    for fn in sorted(os.listdir(d)):
+        if not fn.lower().endswith(".png"):
+            continue
+        path = os.path.join(d, fn)
+        try:
+            with Image.open(path) as old:
+                w, h = old.size
+        except Exception:
+            w, h = master.size
+        w = min(w, 1024)
+        h = min(h, 1024)
+        master.resize((w, h), Image.Resampling.LANCZOS).save(path)
+        print(f"icon -> {path} ({w}x{h})")
 PY
 fi
 
