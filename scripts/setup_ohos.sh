@@ -10,6 +10,7 @@ cd "$(dirname "$0")/.."
 VERSION_LABEL="图学习题解答"
 BUNDLE_ID="com.kepler16f.tuxuejieda"
 OHOS_APP_VERSION="${OHOS_APP_VERSION:-0.0.0}"
+OHOS_DEVELOPER="${OHOS_DEVELOPER:-胡天泽}"
 OHOS_BUILD_NUMBER="${OHOS_BUILD_NUMBER:-1}"
 
 # 版本号同步进 pubspec（flutter create 生成 app.json5 的 versionName / versionCode 取自它）
@@ -21,6 +22,8 @@ fi
 
 # bundleName 指向本项目域名
 sed -i -E "s/\"bundleName\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"bundleName\": \"$BUNDLE_ID\"/" ohos/AppScope/app.json5
+# 开发者（vendor）：鸿蒙端显示「胡天泽」
+sed -i -E "s/\"vendor\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"vendor\": \"$OHOS_DEVELOPER\"/" ohos/AppScope/app.json5
 # 版本号与构建号（用户在 Release / 系统应用信息里看到的 versionName / versionCode）
 sed -i -E "s/\"versionName\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"versionName\": \"$OHOS_APP_VERSION\"/" ohos/AppScope/app.json5
 sed -i -E "s/\"versionCode\"[[:space:]]*:[[:space:]]*[0-9]+/\"versionCode\": $OHOS_BUILD_NUMBER/" ohos/AppScope/app.json5

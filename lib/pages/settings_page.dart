@@ -409,7 +409,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           leading: const Icon(Icons.person_outline_rounded),
                           title: const Text('开发者'),
                           trailing: Text(
-                            'Kepler16f',
+                            _isOhos ? '胡天泽' : 'Kepler16f',
                             style: theme.textTheme.bodyMedium,
                           ),
                         ),
