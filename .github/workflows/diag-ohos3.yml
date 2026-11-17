@@ -1,0 +1,40 @@
+name: diag-ohos3
+
+# 一次性诊断 #3：从 SDK 里挖出 hvigor 的签名配置 schema（certpath/profile 等字段定义）。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: ErBWs/setup-ohos@v2
+        with:
+          version: 26.0.0.821
+          cache: true
+      - name: Find signing schema in SDK
+        run: |
+          echo "=== files mentioning certpath ==="
+          grep -rl "certpath" /home/runner/ohos-sdk 2>/dev/null | head -10
+          echo "=== hvigor plugin dirs ==="
+          find /home/runner -maxdepth 6 -type d -name "*hvigor*" 2>/dev/null | head -10
+          echo "=== ohpm packages ==="
+          ls /home/runner/ohos-sdk/command-line-tools/sdk/default/openharmony/ 2>/dev/null | head -20
+      - name: Extract schema snippets
+        run: |
+          for f in $(grep -rl "certpath" /home/runner/ohos-sdk 2>/dev/null | head -4); do
+            echo "=== $f ==="
+            grep -n -B 12 -A 30 "certpath" "$f" | head -70
+          done
+      - name: Search ohpm caches for hvigor plugin
+        run: |
+          find / -name "*.js" -path "*hvigor-ohos-plugin*" 2>/dev/null | head -5
+          find / -type d -name "hvigor-ohos-plugin" 2>/dev/null | head -5
