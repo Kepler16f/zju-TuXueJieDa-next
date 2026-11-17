@@ -9,9 +9,16 @@
         --alias tuxuejieda \
         --password "$KS_PASS"
 
-模板默认 signingConfigs 为空数组（产物即 unsigned），这里新增一个与
-product.signingConfig 同名（default）的配置，hvigor 便会在 build hap/app
-时用发布证书 + 发布 Profile 正规签名，不再需要手工 zip 打包。
+模板默认 signingConfigs 为空数组（产物即 unsigned）。这里按 HarmonyOS NEXT
+的 hvigor schema 写入一个与 product.signingConfig 同名（default）的配置：
+
+    signingConfigs[0].type      = "HarmonyOS"（schema 只接受 HarmonyOS/OpenHarmony）
+    signingConfigs[0].material  = { storeFile, storePassword, keyAlias, keyPassword,
+                                     signAlg, certpath, profile }
+  其中 certpath 指向 .cer、profile 指向 .p7b，且均为字符串路径。
+
+hvigor 会在 build hap/app 时用发布证书 + 发布 Profile 正规签名，产物
+（尤其 .app）可直接上传 AppGallery Connect，不再需要手工 zip 打包。
 """
 from __future__ import annotations
 
@@ -23,7 +30,6 @@ import re
 
 
 def strip_json5(text: str) -> str:
-    """去掉注释与尾逗号，便于解析。"""
     text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
     text = re.sub(r"^\s*//.*$", "", text, flags=re.M)
     text = re.sub(r",(\s*[}\]])", r"\1", text)
@@ -38,7 +44,6 @@ def main() -> int:
     ap.add_argument("--profile", required=True)
     ap.add_argument("--alias", required=True)
     ap.add_argument("--password", required=True)
-    ap.add_argument("--compatible", default="5.0.5(17)")
     args = ap.parse_args()
 
     with io.open(args.profile_json, encoding="utf-8") as f:
@@ -48,22 +53,15 @@ def main() -> int:
     app["signingConfigs"] = [
         {
             "name": "default",
-            "type": "default",
+            "type": "HarmonyOS",
             "material": {
                 "storeFile": os.path.abspath(args.store),
                 "storePassword": args.password,
                 "keyAlias": args.alias,
                 "keyPassword": args.password,
                 "signAlg": "SHA256withECDSA",
-                "storeType": "p12",
-                "profile": {
-                    "cert": os.path.abspath(args.cert),
-                    "store": os.path.abspath(args.profile),
-                    "name": "release",
-                    "signAlg": "SHA256withECDSA",
-                    "compatibleVersion": args.compatible,
-                    "profileType": "release",
-                },
+                "certpath": os.path.abspath(args.cert),
+                "profile": os.path.abspath(args.profile),
             },
         }
     ]
