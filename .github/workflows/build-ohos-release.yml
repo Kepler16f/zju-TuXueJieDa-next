@@ -58,6 +58,13 @@ jobs:
         run: |
           echo "registry=https://repo.huaweicloud.com/repository/npm/" > ~/.npmrc
           echo "@ohos:registry=https://repo.harmonyos.com/npm/" >> ~/.npmrc
+      - name: Locate hap-sign-tool
+        id: tool
+        run: |
+          JAR=$(find /home/runner/ohos-sdk -iname "hap-sign-tool*.jar" -type f 2>/dev/null | head -1)
+          echo "jar=$JAR" >> "$GITHUB_OUTPUT"
+          echo "jar: $JAR"
+          if [ -z "$JAR" ]; then echo "::error::no hap-sign-tool jar"; exit 1; fi
       - name: Prepare signing material
         env:
           KS_PASS: ${{ secrets.OHOS_KEYSTORE_PASSWORD }}
@@ -94,6 +101,11 @@ jobs:
           echo "flutter exit=$?"
           set -e
           find ohos -name '*.hap' -print
+      - name: Dump sign-app help
+        env:
+          SIGN_JAR: ${{ steps.tool.outputs.jar }}
+        run: |
+          java -jar "$SIGN_JAR" sign-app -h 2>&1 || true
       - name: Sign HAP
         env:
           KS_PASS: ${{ secrets.OHOS_KEYSTORE_PASSWORD }}
