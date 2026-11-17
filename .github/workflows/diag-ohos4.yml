@@ -21,4 +21,4 @@ jobs:
           version: 26.0.0.821
           cache: true
       - name: Dump hvigor signing schema and sign builder
-        run: python3 scripts/dump_hvigor_signing_schema.py
+        run: python3 scripts/dump_hvigor_sign_src.py
