@@ -1,0 +1,149 @@
+name: build-ohos-release
+
+# 鸿蒙正式发布包（.app）：签名 HAP + 打成 .app 上传包 + AGC 上传（可选）。
+# 前置：仓库 Secrets 已配置
+#   OHOS_KEYSTORE_PASSWORD      密钥库密码
+#   OHOS_KEYSTORE_BASE64        ohos_signing/ohos_release.p12 的 base64
+#   OHOS_CERT_BASE64            AGC 申请的发布证书 .cer 的 base64
+#   OHOS_PROFILE_BASE64         AGC 申请的 .p7b Profile 的 base64
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '语义化版本号，如 0.1.7'
+        required: true
+        type: string
+      build_number:
+        description: '构建号'
+        required: false
+        default: '1'
+        type: string
+      upload_to_agc:
+        description: '签名后是否尝试上传到 AppGallery Connect（需配置 AGC 凭据）'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || 'main' }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Setup HarmonyOS SDK and command-line tools
+        uses: ErBWs/setup-ohos@v2
+        with:
+          version: 26.0.0.821
+          cache: true
+      - name: Clone Flutter-ohos SDK
+        run: |
+          FLUTTER_OHOS_DIR="$RUNNER_TEMP/flutter_ohos"
+          git clone --branch oh-3.47.9-dev --depth 1 \
+            https://gitcode.com/openharmony-tpc/flutter_flutter.git "$FLUTTER_OHOS_DIR"
+          git -C "$FLUTTER_OHOS_DIR" fetch --tags --force || true
+          git -C "$FLUTTER_OHOS_DIR" tag -f 3.47.9 HEAD || true
+          cd "$FLUTTER_OHOS_DIR"
+          git config --global --add safe.directory "$FLUTTER_OHOS_DIR"
+          echo "$FLUTTER_OHOS_DIR/bin" >> "$GITHUB_PATH"
+          echo "FLUTTER_ROOT=$FLUTTER_OHOS_DIR" >> "$GITHUB_ENV"
+      - name: Configure npm registry
+        run: |
+          echo "registry=https://repo.huaweicloud.com/repository/npm/" > ~/.npmrc
+          echo "@ohos:registry=https://repo.harmonyos.com/npm/" >> ~/.npmrc
+      - name: Prepare signing material
+        env:
+          KS_PASS: ${{ secrets.OHOS_KEYSTORE_PASSWORD }}
+          KS_B64: ${{ secrets.OHOS_KEYSTORE_BASE64 }}
+          CERT_B64: ${{ secrets.OHOS_CERT_BASE64 }}
+          PROFILE_B64: ${{ secrets.OHOS_PROFILE_BASE64 }}
+        run: |
+          set -e
+          mkdir -p signing
+          echo "$KS_B64" | base64 -d > signing/ohos_release.p12
+          echo "$CERT_B64" | base64 -d > signing/app.cer
+          echo "$PROFILE_B64" | base64 -d > signing/app.p7b
+          ls -la signing/
+      - name: Init OHOS host project
+        env:
+          OHOS_APP_VERSION: ${{ inputs.version }}
+        run: |
+          python3 -m pip install --quiet --disable-pip-version-check pillow
+          for attempt in 1 2 3 4 5; do
+            rm -rf ohos pubspec_overrides.yaml
+            if bash scripts/setup_ohos.sh && flutter pub get; then
+              echo "init ok (attempt $attempt)"; exit 0
+            fi
+            echo "::warning::init failed (attempt $attempt), retry"
+            rm -rf ohos pubspec_overrides.yaml pubspec.lock
+            sleep 30
+          done
+          exit 1
+      - name: Build unsigned HAP
+        run: |
+          set +e
+          flutter build hap --release --target-platform ohos-arm64
+          echo "flutter exit=$?"
+          set -e
+          find ohos -name '*.hap' -print
+      - name: Sign HAP
+        env:
+          KS_PASS: ${{ secrets.OHOS_KEYSTORE_PASSWORD }}
+        run: |
+          set -e
+          SIGN_JAR=$(find /home/runner/ohos-sdk -iname "hap-sign-tool*.jar" -type f | head -1)
+          echo "sign tool: $SIGN_JAR"
+          HAP=$(find ohos -name '*.hap' -type f | head -1)
+          if [ -z "$HAP" ]; then echo "::error::no hap produced"; exit 1; fi
+          mkdir -p signed
+          cp "$HAP" signed/entry-default-signed.hap
+          java -jar "$SIGN_JAR" sign-app \
+            -keyAlias tuxuejieda \
+            -keyPwd "$KS_PASS" \
+            -signAlg SHA256withECDSA \
+            -keystoreFile signing/ohos_release.p12 \
+            -keystorePwd "$KS_PASS" \
+            -certFile signing/app.cer \
+            -profileFile signing/app.p7b \
+            -inFile signed/entry-default-signed.hap \
+            -outFile signed/entry-release-signed.hap
+          java -jar "$SIGN_JAR" verify-app -inFile signed/entry-release-signed.hap || true
+          ls -la signed/
+      - name: Package .app
+        run: |
+          set -e
+          mkdir -p app
+          cp signed/entry-release-signed.hap app/entry-default-signed.hap
+          cp signing/app.cer app/
+          cp signing/app.p7b app/
+          cp ohos/AppScope/resources/base/element/string.json app/ 2>/dev/null || true
+          printf '%s\n' "{\"bundle\":{\"app\":{\"bundleName\":\"com.kepler16f.tuxuejieda\",\"version\":{\"code\":${{ inputs.build_number }},\"name\":\"${{ inputs.version }}\"}}}}" > app/pack.info
+          cd app
+          zip -qry "../tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app" .
+          cd ..
+          ls -la *.app
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ohos-release-app
+          path: tuxuejieda-HarmonyOS-*-release.app
+          archive: false
+          if-no-files-found: error
+      - name: Upload to AppGallery Connect
+        if: ${{ inputs.upload_to_agc }}
+        env:
+          AGC_CLIENT_ID: ${{ secrets.AGC_CLIENT_ID }}
+          AGC_CLIENT_SECRET: ${{ secrets.AGC_CLIENT_SECRET }}
+        run: |
+          set -e
+          if [ -z "$AGC_CLIENT_ID" ]; then
+            echo "::error::AGC credentials not configured"; exit 1
+          fi
+          echo "See AGC open API docs for app upload endpoint; configure per your tenant."
+          echo "APP=$(ls *.app)"

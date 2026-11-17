@@ -51,3 +51,6 @@ app.*.map.json
 # Local asset sources and one-off diagnostics (not needed to build)
 /tools/font_src/
 /tools/debug_*.py
+
+# 鸿蒙签名材料（禁止提交密钥库/证书）
+/ohos_signing/
