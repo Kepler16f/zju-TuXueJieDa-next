@@ -129,7 +129,8 @@ jobs:
             -outFile signed/entry-release-signed.hap
           java -jar "$SIGN_JAR" verify-app \
             -inFile signed/entry-release-signed.hap \
-            -outCertChain signed/cert-chain.cer
+            -outCertChain signed/cert-chain.cer \
+            -outProfile signed/profile.p7b
           ls -la signed/
       - name: Package .app
         run: |
