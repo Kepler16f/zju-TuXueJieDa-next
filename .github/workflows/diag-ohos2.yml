@@ -1,0 +1,53 @@
+name: diag-ohos2
+
+# 一次性诊断 #2：hvigorw / flutter build 目标 / 签名配置 schema。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Setup HarmonyOS SDK and command-line tools
+        uses: ErBWs/setup-ohos@v2
+        with:
+          version: 26.0.0.821
+          cache: true
+      - name: Clone Flutter-ohos SDK
+        run: |
+          git clone --depth 1 --branch oh-3.47.9-dev \
+            https://gitcode.com/openharmony-tpc/flutter_flutter.git "$RUNNER_TEMP/flutter_ohos"
+          cd "$RUNNER_TEMP/flutter_ohos"
+          git config --global --add safe.directory "$RUNNER_TEMP/flutter_ohos"
+          echo "$RUNNER_TEMP/flutter_ohos/bin" >> "$GITHUB_PATH"
+          echo "FLUTTER_ROOT=$RUNNER_TEMP/flutter_ohos" >> "$GITHUB_ENV"
+      - name: Probe hvigor & flutter build targets
+        run: |
+          flutter config --enable-openharmony || true
+          flutter create --platforms ohos --project-name tuxuejieda_next . >/dev/null 2>&1 || true
+          echo "=== ohos dir ==="
+          ls ohos
+          echo "=== hvigorw ==="
+          ls -la ohos/hvigorw 2>/dev/null || echo "(none)"
+          echo "=== hvigor config ==="
+          cat ohos/hvigor/hvigor-config.json5 2>/dev/null || echo "(none)"
+          echo "=== flutter build --help ==="
+          flutter build --help 2>&1 | head -30
+          echo "=== signingConfig schema in SDK ==="
+          grep -rl "profileType" "$HOS_SDK_HOME" 2>/dev/null | head -5
+          echo "=== hvigor-ohos-plugin signing schema ==="
+          find /home/runner -path "*hvigor-ohos-plugin*" -name "*.d.ts" 2>/dev/null | head -5
+      - name: Inspect SDK hvigor plugin schemas
+        run: |
+          echo "=== search compatibleVersion/profileType definitions ==="
+          grep -rn "profileType" /home/runner/ohos-sdk 2>/dev/null | head -5
+          grep -rn "profileType" "$HOME/.hvigor" /home/runner/.hvigor 2>/dev/null | head -5
+          find /home/runner -name "*.d.ts" -path "*hvigor*" 2>/dev/null | head -10
