@@ -1,11 +1,11 @@
 name: build-ohos-release
 
-# 鸿蒙正式发布包（.app）：签名 HAP + 打成 .app 上传包 + AGC 上传（可选）。
+# 鸿蒙发布包（.app）：签名 HAP → 组装 .app → 给 .app 本体签名（AGC 必需）。
 # 前置：仓库 Secrets 已配置
-#   OHOS_KEYSTORE_PASSWORD      密钥库密码
-#   OHOS_KEYSTORE_BASE64        ohos_signing/ohos_release.p12 的 base64
-#   OHOS_CERT_BASE64            AGC 申请的发布证书 .cer 的 base64
-#   OHOS_PROFILE_BASE64         AGC 申请的 .p7b Profile 的 base64
+#   OHOS_KEYSTORE_PASSWORD  密钥库密码
+#   OHOS_KEYSTORE_BASE64    ohos_signing/ohos_release.p12 的 base64
+#   OHOS_CERT_BASE64        AGC 下载的证书链 .cer 的 base64
+#   OHOS_PROFILE_BASE64     AGC 签发的发布 Profile .p7b 的 base64
 on:
   workflow_dispatch:
     inputs:
@@ -32,8 +32,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref || 'main' }}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -46,8 +44,7 @@ jobs:
       - name: Clone Flutter-ohos SDK
         run: |
           FLUTTER_OHOS_DIR="$RUNNER_TEMP/flutter_ohos"
-          git clone --branch oh-3.47.9-dev --depth 1 \
-            https://gitcode.com/openharmony-tpc/flutter_flutter.git "$FLUTTER_OHOS_DIR"
+          git clone --branch oh-3.47.9-dev --depth 1 https://gitcode.com/openharmony-tpc/flutter_flutter.git "$FLUTTER_OHOS_DIR"
           git -C "$FLUTTER_OHOS_DIR" fetch --tags --force || true
           git -C "$FLUTTER_OHOS_DIR" tag -f 3.47.9 HEAD || true
           cd "$FLUTTER_OHOS_DIR"
@@ -58,13 +55,6 @@ jobs:
         run: |
           echo "registry=https://repo.huaweicloud.com/repository/npm/" > ~/.npmrc
           echo "@ohos:registry=https://repo.harmonyos.com/npm/" >> ~/.npmrc
-      - name: Locate hap-sign-tool
-        id: tool
-        run: |
-          JAR=$(find /home/runner/ohos-sdk -iname "hap-sign-tool*.jar" -type f 2>/dev/null | head -1)
-          echo "jar=$JAR" >> "$GITHUB_OUTPUT"
-          echo "jar: $JAR"
-          if [ -z "$JAR" ]; then echo "::error::no hap-sign-tool jar"; exit 1; fi
       - name: Prepare signing material
         env:
           KS_PASS: ${{ secrets.OHOS_KEYSTORE_PASSWORD }}
@@ -75,15 +65,9 @@ jobs:
           set -e
           mkdir -p signing
           echo "$KS_B64" | base64 -d > signing/ohos_release.p12
-          # AGC 下载的 .cer 是完整证书链（根+中间+应用证书），签名工具要求链
           echo "$CERT_B64" | base64 -d > signing/chain.cer
           echo "$PROFILE_B64" | base64 -d > signing/app.p7b
-          # OpenHarmony 约定的签名物料目录：signing/material/
-          mkdir -p signing/material
-          cp signing/ohos_release.p12 signing/material/ohos_release.p12
-          cp signing/chain.cer signing/material/app.cer
-          cp signing/app.p7b signing/material/app.p7b
-          ls -la signing/ signing/material/
+          ls -la signing/
       - name: Init OHOS host project
         env:
           OHOS_APP_VERSION: ${{ inputs.version }}
@@ -101,31 +85,41 @@ jobs:
             sleep 30
           done
           exit 1
-      - name: Write hvigor signing config
+      - name: Build HAP
+        run: |
+          set +e
+          flutter build hap --release --target-platform ohos-arm64
+          status=$?
+          set -e
+          find ohos -name '*.hap' | head -5
+          echo "flutter exit=$status"
+      - name: Sign HAP
         env:
           KS_PASS: ${{ secrets.OHOS_KEYSTORE_PASSWORD }}
         run: |
-          python3 scripts/write_ohos_signing.py             --store signing/ohos_release.p12             --cert signing/chain.cer             --profile signing/app.p7b             --alias tuxuejieda             --password "$KS_PASS"
-          cat ohos/build-profile.json5
-      - name: Build signed APP (hvigor, DevEco-equivalent)
+          set -e
+          SIGN_JAR=$(find /home/runner/ohos-sdk -iname "hap-sign-tool*.jar" -type f | head -1)
+          echo "sign tool: $SIGN_JAR"
+          HAP=$(find ohos -name '*.hap' -type f | head -1)
+          if [ -z "$HAP" ]; then echo "::error::no hap produced"; exit 1; fi
+          mkdir -p signed
+          java -jar "$SIGN_JAR" sign-app -mode localSign -keyAlias tuxuejieda -keyPwd "$KS_PASS" -signAlg SHA256withECDSA -keystoreFile signing/ohos_release.p12 -keystorePwd "$KS_PASS" -appCertFile signing/chain.cer -profileFile signing/app.p7b -profileSigned 1 -compatibleVersion 12 -inFile "$HAP" -outFile signed/entry-default-signed.hap
+          java -jar "$SIGN_JAR" verify-app -inFile signed/entry-default-signed.hap -outCertChain signed/cert-chain.cer -outProfile signed/profile.p7b
+          ls -la signed/
+      - name: Assemble and sign .app
+        env:
+          KS_PASS: ${{ secrets.OHOS_KEYSTORE_PASSWORD }}
         run: |
           set -e
-          # hvigor 用 build-profile.json5 里的签名配置同时签名 HAP 与 .app；
-          # 这是 DevEco Studio「Build APP(s)」的同一条路径，产物可直接上传 AGC。
-          flutter build app --release --target-platform ohos-arm64 \n            || flutter build app --release
-          echo "=== outputs ==="
-          find . -name "*.app" -o -name "*.hap" | head -20
-      - name: Upload signed APP
-        run: |
-          set -e
-          APPFILE=$(find . -name "*.app" -type f | head -1)
-          if [ -z "$APPFILE" ]; then
-            echo "::error::no .app produced"
-            find . -name "*.hap" | head -10
-            exit 1
-          fi
-          echo "app: $APPFILE"
-          cp "$APPFILE" "tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app"
+          SIGN_JAR=$(find /home/runner/ohos-sdk -iname "hap-sign-tool*.jar" -type f | head -1)
+          mkdir -p app
+          cp signed/entry-default-signed.hap app/entry-default-signed.hap
+          unzip -p signed/entry-default-signed.hap pack.info > app/pack.info
+          cd app
+          zip -qry ../unsigned.app .
+          cd ..
+          ls -la unsigned.app
+          java -jar "$SIGN_JAR" sign-app -mode localSign -keyAlias tuxuejieda -keyPwd "$KS_PASS" -signAlg SHA256withECDSA -keystoreFile signing/ohos_release.p12 -keystorePwd "$KS_PASS" -appCertFile signing/chain.cer -profileFile signing/app.p7b -profileSigned 1 -compatibleVersion 12 -inForm zip -inFile unsigned.app -outFile "tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app"
           ls -la *.app
       - uses: actions/upload-artifact@v7
         with:
@@ -144,4 +138,3 @@ jobs:
             echo "::error::AGC credentials not configured"; exit 1
           fi
           echo "See AGC open API docs for app upload endpoint; configure per your tenant."
-          echo "APP=$(ls *.app)"
