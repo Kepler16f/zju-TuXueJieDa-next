@@ -101,11 +101,6 @@ jobs:
           echo "flutter exit=$?"
           set -e
           find ohos -name '*.hap' -print
-      - name: Dump sign-app help
-        env:
-          SIGN_JAR: ${{ steps.tool.outputs.jar }}
-        run: |
-          java -jar "$SIGN_JAR" sign-app -h 2>&1 || true
       - name: Sign HAP
         env:
           KS_PASS: ${{ secrets.OHOS_KEYSTORE_PASSWORD }}
@@ -118,13 +113,16 @@ jobs:
           mkdir -p signed
           cp "$HAP" signed/entry-default-signed.hap
           java -jar "$SIGN_JAR" sign-app \
+            -mode localSign \
             -keyAlias tuxuejieda \
             -keyPwd "$KS_PASS" \
             -signAlg SHA256withECDSA \
             -keystoreFile signing/ohos_release.p12 \
             -keystorePwd "$KS_PASS" \
-            -certFile signing/app.cer \
+            -appCertFile signing/app.cer \
             -profileFile signing/app.p7b \
+            -profileSigned 1 \
+            -compatibleVersion 12 \
             -inFile signed/entry-default-signed.hap \
             -outFile signed/entry-release-signed.hap
           java -jar "$SIGN_JAR" verify-app -inFile signed/entry-release-signed.hap || true
