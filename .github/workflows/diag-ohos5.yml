@@ -1,0 +1,47 @@
+name: diag-ohos5
+
+# 一次性诊断 #5：挖 hvigor assembleApp 的 .app 打包实现（是否签名、包含哪些文件）。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: ErBWs/setup-ohos@v2
+        with:
+          version: 26.0.0.821
+          cache: true
+      - name: Dump assembleApp implementation
+        run: |
+          HV=/home/runner/ohos-sdk/command-line-tools/hvigor
+          echo "=== hvigor layout ==="
+          ls "$HV" 2>/dev/null
+          echo "=== files mentioning assembleApp ==="
+          grep -rln "assembleApp" "$HV" 2>/dev/null | head -10
+          echo "=== files mentioning .app packaging (zip/pack app) ==="
+          grep -rln "\.app\b" "$HV/hvigor-ohos-plugin/src/tasks" 2>/dev/null | head -15
+      - name: Dump app packaging task source
+        run: |
+          HV=/home/runner/ohos-sdk/command-line-tools/hvigor
+          for f in $(grep -rln "assembleApp\|buildApp" "$HV/hvigor-ohos-plugin/src" 2>/dev/null | head -6); do
+            echo "=== $f ==="
+            grep -n -B 5 -A 40 "assembleApp\|buildApp" "$f" | head -80
+          done
+      - name: Dump app pack/zip logic
+        run: |
+          HV=/home/runner/ohos-sdk/command-line-tools/hvigor
+          echo "=== search zip/pack of app ==="
+          grep -rn "pack.info" "$HV/hvigor-ohos-plugin/src" 2>/dev/null | head -10
+          for f in $(grep -rln "pack.info" "$HV/hvigor-ohos-plugin/src" 2>/dev/null | head -4); do
+            echo "=== $f ==="
+            grep -n -B 8 -A 25 "pack.info" "$f" | head -60
+          done
