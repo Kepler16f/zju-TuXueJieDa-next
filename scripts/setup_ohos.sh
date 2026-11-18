@@ -86,10 +86,10 @@ for p in string_files:
     print(f"label -> {TARGET_LABEL} in {p}")
 PY
 
-# 图标：覆盖 AppScope 与 entry 下各 media 目录的 png。
-# 关键：按原文件像素尺寸输出（华为按模板尺寸校验应用图标，统一缩到 512 会
-# 导致应用级图标不合规）；原文件尺寸超过 1024 时才收敛到 1024。
-ICON="$PWD/tools/app_icon_master.png"
+# 图标：AGC 审核要求「单层图」为 1024x1024、方角、无透明像素。
+# 使用 tools/app_icon_square_1024.png（RGB 无 alpha、方角铺满的品牌渐变底）
+# 以 1024x1024 覆盖 AppScope/app_icon.png 与 entry 各语言 media/icon.png。
+ICON="$PWD/tools/app_icon_square_1024.png"
 if [ -f "$ICON" ] && python3 -c "import PIL" 2>/dev/null; then
   python3 - "$ICON" <<'PY'
 import glob
@@ -99,27 +99,14 @@ import sys
 from PIL import Image
 
 icon = sys.argv[1]
-master = Image.open(icon).convert("RGBA")
-media_dirs = sorted(
-    glob.glob("ohos/entry/src/main/resources/*/media")
-    + glob.glob("ohos/AppScope/resources/*/media")
+square = Image.open(icon).convert("RGB")
+targets = sorted(
+    glob.glob("ohos/entry/src/main/resources/*/media/icon.png")
+    + glob.glob("ohos/AppScope/resources/*/media/app_icon.png")
 )
-for d in media_dirs:
-    if not os.path.isdir(d):
-        continue
-    for fn in sorted(os.listdir(d)):
-        if not fn.lower().endswith(".png"):
-            continue
-        path = os.path.join(d, fn)
-        try:
-            with Image.open(path) as old:
-                w, h = old.size
-        except Exception:
-            w, h = master.size
-        w = min(w, 1024)
-        h = min(h, 1024)
-        master.resize((w, h), Image.Resampling.LANCZOS).save(path)
-        print(f"icon -> {path} ({w}x{h})")
+for path in targets:
+    square.save(path, format="PNG")
+    print(f"icon -> {path} (1024x1024 RGB, square, no alpha)")
 PY
 fi
 
