@@ -13,6 +13,7 @@ import concurrent.futures
 import hashlib
 import io
 import json
+import math
 import os
 import re
 import shutil
@@ -638,6 +639,241 @@ def _palette(index: int) -> tuple[int, int, int]:
     return (index, index, index)
 
 
+_DISK_ANS_MAP_CACHE: dict[str, str] | None = None
+
+
+def _get_disk_ans_map() -> dict[str, str]:
+    global _DISK_ANS_MAP_CACHE
+    if _DISK_ANS_MAP_CACHE is None:
+        _DISK_ANS_MAP_CACHE = {
+            f.lower(): f for f in os.listdir(SOURCE_ROOT / "AnsSubTu")
+        }
+    return _DISK_ANS_MAP_CACHE
+
+
+def decode_member_bitmap(df: DirFile, mem: dict[str, Any]) -> Image.Image | None:
+    """Decode cast member bitmap from BITD, embedded ediM JPEG, or external AnsSubTu file."""
+    ch = mem["chunks"]
+    if "BITD" in ch:
+        alfa = df.chunks[ch["ALFA"]][1] if "ALFA" in ch else None
+        return decode_bitd_rgba(mem["spec"], df.chunks[ch["BITD"]][1], alfa)
+    if "ediM" in ch:
+        raw = df.chunks[ch["ediM"]][1]
+        return Image.open(io.BytesIO(raw)).convert("RGBA")
+    if mem.get("ext"):
+        ext_base = os.path.basename(mem["ext"].replace("\\", "/")).lower()
+        disk_file = _get_disk_ans_map().get(ext_base)
+        if disk_file:
+            return Image.open(SOURCE_ROOT / "AnsSubTu" / disk_file).convert("RGBA")
+    return None
+
+
+def get_sprite_colors(
+    rec: bytes,
+) -> tuple[tuple[int, int, int], tuple[int, int, int]]:
+    """Extract Director 8.5 foreColor and backColor RGB from a 42-byte score record.
+
+    rec[20] nibble 0x10 = foreColor is 24-bit RGB (R=rec[2], G=rec[24], B=rec[26])
+    rec[20] nibble 0x20 = backColor is 24-bit RGB (R=rec[3], G=rec[25], B=rec[27])
+    Otherwise rec[2] / rec[3] are 8-bit palette indices.
+    """
+    r20 = rec[20] if len(rec) > 20 else 0
+    fg_idx = rec[2] if len(rec) > 2 else 255
+    bg_idx = rec[3] if len(rec) > 3 else 0
+    if (r20 & 0x10) and len(rec) >= 28:
+        fg_rgb = (rec[2], rec[24], rec[26])
+    else:
+        fg_rgb = _palette(fg_idx)
+    if (r20 & 0x20) and len(rec) >= 28:
+        bg_rgb = (rec[3], rec[25], rec[27])
+    else:
+        bg_rgb = _palette(bg_idx)
+    return fg_rgb, bg_rgb
+
+
+def key_and_recolor_member(
+    base_sp: Image.Image,
+    ink: int,
+    fg_rgb: tuple[int, int, int],
+    bg_rgb: tuple[int, int, int],
+    dark_frac: float,
+) -> Image.Image:
+    """Apply Director ink keying and foreground/background recoloring on the
+    unscaled cast member bitmap BEFORE resizing or affine warping.
+
+    Keying before BILINEAR resampling prevents anti-aliased edge pixels on
+    matte/mask erasers (such as m4 in 79_33 and 74_24) from escaping the white
+    key and leaving gray arc artifacts on the stage.
+    """
+    arr = np.array(base_sp, dtype=np.uint8)
+    r, g, b, a = arr[:, :, 0], arr[:, :, 1], arr[:, :, 2], arr[:, :, 3]
+    is_white = (r >= 250) & (g >= 250) & (b >= 250)
+    is_dark = (r < 128) & (g < 128) & (b < 128)
+
+    def tint_fg(mask: np.ndarray) -> None:
+        if fg_rgb == (0, 0, 0):
+            return
+        if fg_rgb == (255, 255, 255):
+            arr[:, :, 0][mask] = 255
+            arr[:, :, 1][mask] = 255
+            arr[:, :, 2][mask] = 255
+        else:
+            arr[:, :, 0][mask] = fg_rgb[0]
+            arr[:, :, 1][mask] = fg_rgb[1]
+            arr[:, :, 2][mask] = fg_rgb[2]
+
+    if ink in (1, 36):  # Transparent / BgTransparent
+        arr[:, :, 3] = np.where(is_white, 0, a)
+        fg_pixels = (~is_white) & (arr[:, :, 3] > 0)
+        if fg_rgb == (255, 255, 255) or dark_frac <= 0.35:
+            tint_fg(fg_pixels)
+        return Image.fromarray(arr, mode="RGBA")
+
+    if ink == 4:  # Mask
+        fg_pixels = ~is_white
+        out = np.zeros_like(arr)
+        out[fg_pixels] = [fg_rgb[0], fg_rgb[1], fg_rgb[2], 255]
+        return Image.fromarray(out, mode="RGBA")
+
+    if ink == 8:  # Matte: flood-fill outer white from borders
+        h, w = is_white.shape
+        visited = np.zeros((h, w), dtype=bool)
+        q: deque[tuple[int, int]] = deque()
+        for x in range(w):
+            if is_white[0, x]:
+                visited[0, x] = True
+                q.append((0, x))
+            if h > 1 and is_white[h - 1, x]:
+                visited[h - 1, x] = True
+                q.append((h - 1, x))
+        for y in range(1, h - 1):
+            if is_white[y, 0]:
+                visited[y, 0] = True
+                q.append((y, 0))
+            if w > 1 and is_white[y, w - 1]:
+                visited[y, w - 1] = True
+                q.append((y, w - 1))
+        while q:
+            cy, cx = q.popleft()
+            for ny, nx in ((cy - 1, cx), (cy + 1, cx), (cy, cx - 1), (cy, cx + 1)):
+                if (
+                    0 <= ny < h
+                    and 0 <= nx < w
+                    and not visited[ny, nx]
+                    and is_white[ny, nx]
+                ):
+                    visited[ny, nx] = True
+                    q.append((ny, nx))
+        arr[:, :, 3] = np.where(visited, 0, a)
+        fg_pixels = (~is_white) & (arr[:, :, 3] > 0)
+        tint_fg(fg_pixels)
+        return Image.fromarray(arr, mode="RGBA")
+
+    # ink == 0 (Copy)
+    if fg_rgb == (255, 255, 255) and bg_rgb == (255, 255, 255):
+        out = np.full_like(arr, 255)
+        return Image.fromarray(out, mode="RGBA")
+    if fg_rgb == (255, 255, 255) and dark_frac >= 0.35:
+        out = np.zeros_like(arr)
+        out[is_dark] = [255, 255, 255, 255]
+        return Image.fromarray(out, mode="RGBA")
+    if fg_rgb != (0, 0, 0) and dark_frac <= 0.35:
+        fg_pixels = ~is_white
+        tint_fg(fg_pixels)
+        return Image.fromarray(arr, mode="RGBA")
+    return Image.fromarray(arr, mode="RGBA")
+
+
+def transform_and_paste_sprite(
+    canvas: Image.Image,
+    keyed_member: Image.Image,
+    px: int,
+    py: int,
+    regX: int,
+    regY: int,
+    target_sz: tuple[int, int],
+    flip_h: bool,
+    flip_v: bool,
+    rot_centideg: int,
+    skew_centideg: int,
+) -> None:
+    """Transform keyed cast member around (regX, regY) and composite at (px, py)."""
+    mw, mh = keyed_member.size
+    tw, th = target_sz
+    scale_x = tw / mw
+    scale_y = th / mh
+
+    if rot_centideg == 0 and skew_centideg == 0:
+        sp = keyed_member
+        if (tw, th) != (mw, mh):
+            sp = sp.resize((tw, th), Image.Resampling.BILINEAR)
+        if flip_h:
+            sp = sp.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+            left = round(px - (mw - regX) * scale_x)
+        else:
+            left = round(px - regX * scale_x)
+        if flip_v:
+            sp = sp.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
+            top = round(py - (mh - regY) * scale_y)
+        else:
+            top = round(py - regY * scale_y)
+        canvas.alpha_composite(sp, dest=(left, top))
+        return
+
+    sx = -scale_x if flip_h else scale_x
+    sy = -scale_y if flip_v else scale_y
+    theta = math.radians(rot_centideg / 100.0)
+    phi = math.radians(skew_centideg / 100.0)
+
+    cos_t = math.cos(theta)
+    sin_t = math.sin(theta)
+    cos_tp = math.cos(theta + phi)
+    sin_tp = math.sin(theta + phi)
+
+    a11 = sx * cos_t
+    a12 = -sy * sin_tp
+    a21 = sx * sin_t
+    a22 = sy * cos_tp
+
+    det = a11 * a22 - a12 * a21
+    if abs(det) < 1e-8:
+        return
+
+    corners_uv = [(0.0, 0.0), (float(mw), 0.0), (0.0, float(mh)), (float(mw), float(mh))]
+    xs: list[float] = []
+    ys: list[float] = []
+    for u, v in corners_uv:
+        du = u - regX
+        dv = v - regY
+        xs.append(px + a11 * du + a12 * dv)
+        ys.append(py + a21 * du + a22 * dv)
+
+    x0 = max(0, int(math.floor(min(xs))) - 2)
+    y0 = max(0, int(math.floor(min(ys))) - 2)
+    x1 = min(STAGE_W, int(math.ceil(max(xs))) + 2)
+    y1 = min(STAGE_H, int(math.ceil(max(ys))) + 2)
+    out_w = x1 - x0
+    out_h = y1 - y0
+    if out_w <= 0 or out_h <= 0:
+        return
+
+    inv11 = a22 / det
+    inv12 = -a12 / det
+    inv21 = -a21 / det
+    inv22 = a11 / det
+
+    c_off = regX + inv11 * (x0 - px) + inv12 * (y0 - py)
+    f_off = regY + inv21 * (x0 - px) + inv22 * (y0 - py)
+
+    warped = keyed_member.transform(
+        (out_w, out_h),
+        Image.Transform.AFFINE,
+        (inv11, inv12, c_off, inv21, inv22, f_off),
+        resample=Image.Resampling.BILINEAR,
+    )
+    canvas.alpha_composite(warped, dest=(x0, y0))
+
+
 def is_legacy_chrome(
     mem: dict[str, Any],
     top: int,
@@ -647,7 +883,9 @@ def is_legacy_chrome(
 ) -> bool:
     """Return True if sprite is legacy Director navigation UI chrome to strip."""
     nm = mem["name"].strip().lower()
-    if nm in CHROME_BUTTON_NAMES or nm.startswith(("s_", "a_")):
+    if nm in CHROME_BUTTON_NAMES:
+        return True
+    if nm.startswith(("s_", "a_")) and h <= 100:
         return True
     if any(b.strip() for b in behs):
         return True
@@ -780,8 +1018,11 @@ def extract_jieti_steps(
             key_frames.append(fidx)
 
     # Decode member bitmaps cache per .dir file
-    bmp_cache: dict[int, Image.Image] = {}
-    ink_cache: dict[tuple[int, int, tuple[int, int], int, bool, bool, tuple[int, int, int] | None], Image.Image] = {}
+    bmp_cache: dict[int, Image.Image | None] = {}
+    keyed_cache: dict[
+        tuple[int, int, tuple[int, int, int], tuple[int, int, int], bool],
+        Image.Image,
+    ] = {}
     xmed_cache: dict[int, str] = {}
     member_dark_frac: dict[int, float] = {}
 
@@ -793,6 +1034,7 @@ def extract_jieti_steps(
         fr = frames[fidx - 1]
         canvas = Image.new("RGBA", (STAGE_W, STAGE_H), (255, 255, 255, 255))
         step_notes: list[str] = []
+        drew_any_sprite = False
 
         for ch in sorted(fr.keys()):
             if ch < 6:
@@ -818,7 +1060,22 @@ def extract_jieti_steps(
                     step_notes.append(nt)
                 continue
 
-            if mem["type"] != 1 or "BITD" not in mem["chunks"]:
+            if mem["type"] != 1:
+                continue
+
+            if cmem not in bmp_cache:
+                bmp_cache[cmem] = decode_member_bitmap(df, mem)
+                if bmp_cache[cmem] is not None:
+                    _arr = np.array(bmp_cache[cmem])
+                    _op = _arr[:, :, 3] == 255
+                    if _op.any():
+                        _px = _arr[_op][:, :3].astype(np.int32)
+                        _lum = (_px * [299, 587, 114]).sum(axis=1) // 1000
+                        member_dark_frac[cmem] = float(((_lum < 128).sum()) / len(_px))
+                    else:
+                        member_dark_frac[cmem] = 0.0
+            base_sp = bmp_cache[cmem]
+            if base_sp is None:
                 continue
 
             py, px, h, w = struct.unpack(">hhhh", rec[12:20])
@@ -826,83 +1083,56 @@ def extract_jieti_steps(
             ink = rec[1] & 0x3F
             sid = struct.unpack(">H", rec[10:12])[0]
             behs = [members.get(bm, {}).get("script", "") for _, bm in spans.get(sid, [])]
-            # Sprite flip bits live in rec[22] (0x40 = flipH, 0x20 = flipV).
-            # Ignoring them renders mirrored overlays (e.g. the yellow helper
-            # lines of 35_41 / 45_59 appear side-swapped).
+            # Director 8.5 score record flip bits in rec[22]:
+            #   0x20 (32) = flipH (FLIP_LEFT_RIGHT)
+            #   0x40 (64) = flipV (FLIP_TOP_BOTTOM)
             flip_flags = rec[22] if len(rec) >= 23 else 0
-            flip_h = bool(flip_flags & 0x40)
-            flip_v = bool(flip_flags & 0x20)
+            flip_h = bool(flip_flags & 0x20)
+            flip_v = bool(flip_flags & 0x40)
 
-            if cmem not in bmp_cache:
-                alfa = df.chunks[mem["chunks"]["ALFA"]][1] if "ALFA" in mem["chunks"] else None
-                bmp_cache[cmem] = decode_bitd_rgba(
-                    mem["spec"], df.chunks[mem["chunks"]["BITD"]][1], alfa
-                )
-                _arr = np.array(bmp_cache[cmem])
-                _op = _arr[:, :, 3] == 255
-                if _op.any():
-                    _px = _arr[_op][:, :3].astype(np.int32)
-                    _lum = (_px * [299, 587, 114]).sum(axis=1) // 1000
-                    member_dark_frac[cmem] = float(((_lum < 128).sum()) / len(_px))
-                else:
-                    member_dark_frac[cmem] = 0.0
-            base_sp = bmp_cache[cmem]
             target_sz = (w, h) if (w > 0 and h > 0) else base_sp.size
-
-            # Director scales the member bitmap to the sprite rect (w, h) and
-            # scales the regPoint by the same factor: loc = topLeft + regPoint*scale.
-            # The score record stores the stage loc of the (scaled) regPoint, so
-            # the paste origin must subtract the SCALED regPoint, not the raw one.
-            # (Unscaled subtraction misaligns every overlay whose sprite rect
-            # differs from the member's natural size.)
             scale_x = target_sz[0] / base_sp.size[0]
             scale_y = target_sz[1] / base_sp.size[1]
-            left = round(px - regX * scale_x)
-            top = round(py - regY * scale_y)
-            if is_legacy_chrome(mem, top, h, behs, is_tabbed):
+            approx_top = round(py - regY * scale_y)
+            if is_legacy_chrome(mem, approx_top, h, behs, is_tabbed):
                 continue
 
             rot_centideg = struct.unpack(">i", rec[28:32])[0] if len(rec) >= 32 else 0
-            rot_key = rot_centideg if (ink == 4 and abs(rot_centideg) in (9000, 18000, 27000)) else 0
-            fg_index = rec[2] if len(rec) >= 3 else 0
-            # Foreground-color recoloring (Director rec[2] palette index):
-            #   ink 8  -> dark pixels take palette[fg] (0x00=white erasers,
-            #             0xff=black, else the gray ramp);
-            #   ink1/36 -> only thin line-art members gray out mid-fg values,
-            #             so label glyphs (dark-majority) stay untouched;
-            #   ink 0  -> a dark-majority member with fg=white is an eraser
-            #             (jieP45_59's pie wedge wipes the pre-drawn arc).
+            skew_centideg = struct.unpack(">i", rec[32:36])[0] if len(rec) >= 36 else 0
+            fg_rgb, bg_rgb = get_sprite_colors(rec)
             dark_frac = member_dark_frac.get(cmem, 1.0)
-            recolor_rgb: tuple[int, int, int] | None = None
-            ink_eff = ink
-            if ink == 8:
-                recolor_rgb = _palette(fg_index)
-            elif ink in (1, 36) and 0 < fg_index < 255 and dark_frac <= 0.2:
-                recolor_rgb = (fg_index, fg_index, fg_index)
-            elif ink == 0 and fg_index == 0 and dark_frac >= 0.5:
-                # Dark-dominant shape with a white fg color = white eraser.
-                ink_eff = 4
-                recolor_rgb = (255, 255, 255)
-            cache_k = (cmem, ink_eff, target_sz, rot_key, flip_h, flip_v, recolor_rgb)
-            if cache_k not in ink_cache:
-                sp_img = base_sp
-                if target_sz != sp_img.size:
-                    sp_img = sp_img.resize(target_sz, Image.Resampling.BILINEAR)
-                if flip_h:
-                    sp_img = sp_img.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
-                if flip_v:
-                    sp_img = sp_img.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
-                if rot_key:
-                    sp_img = sp_img.rotate(-rot_key / 100.0, expand=False)
-                sp_inked = apply_ink(sp_img, ink_eff, recolor_rgb=recolor_rgb)
-                if _is_white_cover_patch(sp_inked, target_sz):
-                    # Legacy covers embed an ugly dark border; use pure white.
-                    sp_inked = Image.new("RGBA", sp_inked.size, (255, 255, 255, 255))
-                ink_cache[cache_k] = sp_inked
-            if rot_key:
-                left = px - target_sz[0] // 2
-                top = py - target_sz[1] // 2
-            canvas.alpha_composite(ink_cache[cache_k], dest=(left, top))
+            is_cover = (ink == 0) and _is_white_cover_patch(base_sp, target_sz)
+
+            cache_k = (cmem, ink, fg_rgb, bg_rgb, is_cover)
+            if cache_k not in keyed_cache:
+                if is_cover:
+                    # Strip embedded 1px dark border on legacy white-out cover boxes
+                    # BEFORE affine warping so rotated covers (e.g. 20_16, 26_25) leave no border trace.
+                    keyed = Image.new("RGBA", base_sp.size, (255, 255, 255, 255))
+                else:
+                    keyed = key_and_recolor_member(base_sp, ink, fg_rgb, bg_rgb, dark_frac)
+                    if ink == 0 and _is_white_cover_patch(keyed, target_sz):
+                        keyed = Image.new("RGBA", keyed.size, (255, 255, 255, 255))
+                keyed_cache[cache_k] = keyed
+
+            transform_and_paste_sprite(
+                canvas,
+                keyed_cache[cache_k],
+                px,
+                py,
+                regX,
+                regY,
+                target_sz,
+                flip_h,
+                flip_v,
+                rot_centideg,
+                skew_centideg,
+            )
+            drew_any_sprite = True
+
+        # Skip trailing empty template wait frames that contain neither sprites nor notes
+        if not drew_any_sprite and not step_notes:
+            continue
 
         rgb_img = canvas.convert("RGB")
         # Normalize near-white edges if needed, compute pixel hash for dedup
@@ -1135,7 +1365,7 @@ def steps_only() -> None:
     cur_path = ASSETS_ROOT / "data" / "curriculum.json"
     curriculum = json.loads(cur_path.read_text(encoding="utf-8"))
     steps_dir = ASSETS_ROOT / "steps"
-    old_files = sorted(p.name for p in steps_dir.glob("*.png"))
+    old_files = sorted(p.name for p in steps_dir.glob("*.webp"))
 
     count_changes: list[str] = []
     for p in curriculum["problems"]:
@@ -1151,7 +1381,7 @@ def steps_only() -> None:
         json.dumps(curriculum, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
-    new_files = sorted(p.name for p in steps_dir.glob("*.png"))
+    new_files = sorted(p.name for p in steps_dir.glob("*.webp"))
     referenced = {
         s["image"].split("/")[-1] for p in curriculum["problems"] for s in p["steps"]
     }

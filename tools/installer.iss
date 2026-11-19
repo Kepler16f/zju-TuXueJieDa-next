@@ -64,9 +64,10 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 Source: "{#MySourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
-; 步骤图自 v0.1.3 起为 WebP；清理旧版本遗留的 PNG（Inno 不删除多余文件）。
+; 步骤图自 v0.1.3 起为 WebP；清理旧版本遗留的 PNG 与已移除的旧步骤图（Inno 默认不删除多余文件）。
 [InstallDelete]
 Type: files; Name: "{app}\data\flutter_assets\assets\steps\*.png"
+Type: files; Name: "{app}\data\flutter_assets\assets\steps\*.webp"
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

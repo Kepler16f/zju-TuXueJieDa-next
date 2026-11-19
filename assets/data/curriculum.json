@@ -1004,7 +1004,7 @@
       "statement": "写出下列两直线的相对的位置（相交、平行、垂直相交、交叉等）。",
       "subjectImage": "assets/subjects/21_17.jpg",
       "answerImage": "assets/answers/21_17.jpg",
-      "jietiMode": "stepped",
+      "jietiMode": "two_state",
       "steps": [
         {
           "index": 1,
@@ -1014,14 +1014,8 @@
         },
         {
           "index": 2,
-          "title": "第 1 步",
+          "title": "完整答案",
           "image": "assets/steps/21_17_02.webp",
-          "note": ""
-        },
-        {
-          "index": 3,
-          "title": "最终答案",
-          "image": "assets/steps/21_17_03.webp",
           "note": ""
         }
       ],
@@ -1072,14 +1066,8 @@
         },
         {
           "index": 6,
-          "title": "第 5 步",
-          "image": "assets/steps/21_18_06.webp",
-          "note": ""
-        },
-        {
-          "index": 7,
           "title": "最终答案",
-          "image": "assets/steps/21_18_07.webp",
+          "image": "assets/steps/21_18_06.webp",
           "note": ""
         }
       ],
@@ -1194,7 +1182,7 @@
       "statement": "试判别下列平面相对投影面的位置（写出平面位置的名称）。",
       "subjectImage": "assets/subjects/24_22.jpg",
       "answerImage": "assets/answers/24_22.jpg",
-      "jietiMode": "stepped",
+      "jietiMode": "two_state",
       "steps": [
         {
           "index": 1,
@@ -1204,14 +1192,8 @@
         },
         {
           "index": 2,
-          "title": "第 1 步",
+          "title": "完整答案",
           "image": "assets/steps/24_22_02.webp",
-          "note": ""
-        },
-        {
-          "index": 3,
-          "title": "最终答案",
-          "image": "assets/steps/24_22_03.webp",
           "note": ""
         }
       ],
@@ -1228,7 +1210,7 @@
       "statement": " 试在已知平面上作特殊位置直线（注出直线的符号）。\n1.求作水平线EF距H面15mm。\n2.求作正平线EF距V面14mm。\n3.求作正平线EF距V面16mm。\n4.求作水平线，其β=60°。",
       "subjectImage": "assets/subjects/25_23.jpg",
       "answerImage": "assets/answers/25_23.jpg",
-      "jietiMode": "stepped",
+      "jietiMode": "two_state",
       "steps": [
         {
           "index": 1,
@@ -1238,14 +1220,8 @@
         },
         {
           "index": 2,
-          "title": "第 1 步",
+          "title": "完整答案",
           "image": "assets/steps/25_23_02.webp",
-          "note": ""
-        },
-        {
-          "index": 3,
-          "title": "最终答案",
-          "image": "assets/steps/25_23_03.webp",
           "note": ""
         }
       ],
@@ -1262,7 +1238,7 @@
       "statement": "点E和F在平面KLMN上，作出它们的另一投影。",
       "subjectImage": "assets/subjects/22_23_1_n.jpg",
       "answerImage": "assets/answers/22_23_1_n.jpg",
-      "jietiMode": "stepped",
+      "jietiMode": "two_state",
       "steps": [
         {
           "index": 1,
@@ -1272,14 +1248,8 @@
         },
         {
           "index": 2,
-          "title": "第 1 步",
+          "title": "完整答案",
           "image": "assets/steps/22_23_1_n_02.webp",
-          "note": ""
-        },
-        {
-          "index": 3,
-          "title": "最终答案",
-          "image": "assets/steps/22_23_1_n_03.webp",
           "note": ""
         }
       ],
@@ -1296,7 +1266,7 @@
       "statement": "点E和F在平面KLMN上，作出它们的另一投影。",
       "subjectImage": "assets/subjects/22_23_2_n.jpg",
       "answerImage": "assets/answers/22_23_2_n.jpg",
-      "jietiMode": "stepped",
+      "jietiMode": "two_state",
       "steps": [
         {
           "index": 1,
@@ -1306,14 +1276,8 @@
         },
         {
           "index": 2,
-          "title": "第 1 步",
+          "title": "完整答案",
           "image": "assets/steps/22_23_2_n_02.webp",
-          "note": ""
-        },
-        {
-          "index": 3,
-          "title": "最终答案",
-          "image": "assets/steps/22_23_2_n_03.webp",
           "note": ""
         }
       ],
@@ -1606,7 +1570,7 @@
       "statement": "试作平面投影。\n1.作一等边三角形，高为16mm,且垂直于V面，α=45°， 此平面与Y轴的垂直距离为18 mm。\n2.作一直径为25 mm的圆，使其平行于V面，且距V面为13 mm，圆心距离H面为14 mm。",
       "subjectImage": "assets/subjects/29_30.jpg",
       "answerImage": "assets/answers/29_30.jpg",
-      "jietiMode": "stepped",
+      "jietiMode": "two_state",
       "steps": [
         {
           "index": 1,
@@ -1616,14 +1580,8 @@
         },
         {
           "index": 2,
-          "title": "第 1 步",
+          "title": "完整答案",
           "image": "assets/steps/29_30_02.webp",
-          "note": ""
-        },
-        {
-          "index": 3,
-          "title": "最终答案",
-          "image": "assets/steps/29_30_03.webp",
           "note": ""
         }
       ],
@@ -1640,7 +1598,7 @@
       "statement": "试完成侧垂面△ABC的正面投影。",
       "subjectImage": "assets/subjects/26_30_3_n.jpg",
       "answerImage": "assets/answers/26_30_3_n.jpg",
-      "jietiMode": "stepped",
+      "jietiMode": "two_state",
       "steps": [
         {
           "index": 1,
@@ -1650,14 +1608,8 @@
         },
         {
           "index": 2,
-          "title": "第 1 步",
+          "title": "完整答案",
           "image": "assets/steps/26_30_3_n_02.webp",
-          "note": ""
-        },
-        {
-          "index": 3,
-          "title": "最终答案",
-          "image": "assets/steps/26_30_3_n_03.webp",
           "note": ""
         }
       ],
@@ -1708,7 +1660,7 @@
       "statement": "直线AB平行于四边形CDEF，画出其正面投影。",
       "subjectImage": "assets/subjects/27_32_n.jpg",
       "answerImage": "assets/answers/27_32_n.jpg",
-      "jietiMode": "stepped",
+      "jietiMode": "two_state",
       "steps": [
         {
           "index": 1,
@@ -1718,14 +1670,8 @@
         },
         {
           "index": 2,
-          "title": "第 1 步",
+          "title": "完整答案",
           "image": "assets/steps/27_32_n_02.webp",
-          "note": ""
-        },
-        {
-          "index": 3,
-          "title": "最终答案",
-          "image": "assets/steps/27_32_n_03.webp",
           "note": ""
         }
       ],
@@ -1798,7 +1744,7 @@
       "statement": "过点K作平面（用三角形表示）平行于已知平面△ABC。",
       "subjectImage": "assets/subjects/29_35_1_n.jpg",
       "answerImage": "assets/answers/29_35_1_n.jpg",
-      "jietiMode": "stepped",
+      "jietiMode": "two_state",
       "steps": [
         {
           "index": 1,
@@ -1808,14 +1754,8 @@
         },
         {
           "index": 2,
-          "title": "第 1 步",
+          "title": "完整答案",
           "image": "assets/steps/29_35_1_n_02.webp",
-          "note": ""
-        },
-        {
-          "index": 3,
-          "title": "最终答案",
-          "image": "assets/steps/29_35_1_n_03.webp",
           "note": ""
         }
       ],
@@ -1832,7 +1772,7 @@
       "statement": "过点K作平面（用三角形表示）平行于已知平面，已知平面\n为AB、CD两平行直线决定。",
       "subjectImage": "assets/subjects/29_35_2_n.jpg",
       "answerImage": "assets/answers/29_35_2_n.jpg",
-      "jietiMode": "stepped",
+      "jietiMode": "two_state",
       "steps": [
         {
           "index": 1,
@@ -1842,14 +1782,8 @@
         },
         {
           "index": 2,
-          "title": "第 1 步",
+          "title": "完整答案",
           "image": "assets/steps/29_35_2_n_02.webp",
-          "note": ""
-        },
-        {
-          "index": 3,
-          "title": "最终答案",
-          "image": "assets/steps/29_35_2_n_03.webp",
           "note": ""
         }
       ],
@@ -2664,7 +2598,7 @@
       "statement": "试完成圆锥被截切后的水平投影和侧面投影。",
       "subjectImage": "assets/subjects/36_7_n.jpg",
       "answerImage": "assets/answers/36_7_n.jpg",
-      "jietiMode": "stepped",
+      "jietiMode": "two_state",
       "steps": [
         {
           "index": 1,
@@ -2674,14 +2608,8 @@
         },
         {
           "index": 2,
-          "title": "第 1 步",
+          "title": "完整答案",
           "image": "assets/steps/36_7_n_02.webp",
-          "note": ""
-        },
-        {
-          "index": 3,
-          "title": "最终答案",
-          "image": "assets/steps/36_7_n_03.webp",
           "note": ""
         }
       ],
@@ -2962,7 +2890,7 @@
       "statement": "试完成下列切口回转体的三面投影。",
       "subjectImage": "assets/subjects/38_11_1_n.jpg",
       "answerImage": "assets/answers/38_11_1_n.jpg",
-      "jietiMode": "stepped",
+      "jietiMode": "two_state",
       "steps": [
         {
           "index": 1,
@@ -2972,14 +2900,8 @@
         },
         {
           "index": 2,
-          "title": "第 1 步",
+          "title": "完整答案",
           "image": "assets/steps/38_11_1_n_02.webp",
-          "note": ""
-        },
-        {
-          "index": 3,
-          "title": "最终答案",
-          "image": "assets/steps/38_11_1_n_03.webp",
           "note": ""
         }
       ],
@@ -2996,7 +2918,7 @@
       "statement": "试完成下列切口回转体的三面投影。",
       "subjectImage": "assets/subjects/38_11_2_n.jpg",
       "answerImage": "assets/answers/38_11_2_n.jpg",
-      "jietiMode": "stepped",
+      "jietiMode": "two_state",
       "steps": [
         {
           "index": 1,
@@ -3006,14 +2928,8 @@
         },
         {
           "index": 2,
-          "title": "第 1 步",
+          "title": "完整答案",
           "image": "assets/steps/38_11_2_n_02.webp",
-          "note": ""
-        },
-        {
-          "index": 3,
-          "title": "最终答案",
-          "image": "assets/steps/38_11_2_n_03.webp",
           "note": ""
         }
       ],
@@ -5948,14 +5864,8 @@
         },
         {
           "index": 8,
-          "title": "第 7 步",
-          "image": "assets/steps/88_3_08.webp",
-          "note": ""
-        },
-        {
-          "index": 9,
           "title": "最终答案",
-          "image": "assets/steps/88_3_09.webp",
+          "image": "assets/steps/88_3_08.webp",
           "note": "11. 做一圆柱K(R:6.5,H:30)\n12. subtract(当前Box,圆柱K)\n该构造的三维实体即为所求的三维实体."
         }
       ],
@@ -6018,14 +5928,8 @@
         },
         {
           "index": 8,
-          "title": "第 7 步",
-          "image": "assets/steps/88_4_08.webp",
-          "note": ""
-        },
-        {
-          "index": 9,
           "title": "最终答案",
-          "image": "assets/steps/88_4_09.webp",
+          "image": "assets/steps/88_4_08.webp",
           "note": "8. 加灯光"
         }
       ],

@@ -55,6 +55,12 @@ jobs:
         run: |
           echo "registry=https://repo.huaweicloud.com/repository/npm/" > ~/.npmrc
           echo "@ohos:registry=https://repo.harmonyos.com/npm/" >> ~/.npmrc
+      - name: Cache OHOS pub git overrides
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache/git
+          key: ohos-pub-git-v1-${{ hashFiles('scripts/setup_ohos.sh') }}
+          restore-keys: ohos-pub-git-v1-
       - name: Prepare signing material
         env:
           KS_PASS: ${{ secrets.OHOS_KEYSTORE_PASSWORD }}
@@ -73,16 +79,20 @@ jobs:
           OHOS_APP_VERSION: ${{ inputs.version }}
           OHOS_BUILD_NUMBER: ${{ inputs.build_number }}
           OHOS_DEVELOPER: 胡天泽
+          GIT_TERMINAL_PROMPT: "0"
         run: |
           python3 -m pip install --quiet --disable-pip-version-check pillow
+          git config --global http.lowSpeedLimit 1024
+          git config --global http.lowSpeedTime 25
+          git config --global http.postBuffer 524288000
           for attempt in 1 2 3 4 5; do
             rm -rf ohos pubspec_overrides.yaml
-            if bash scripts/setup_ohos.sh && flutter pub get; then
+            if timeout 240 bash -c 'bash scripts/setup_ohos.sh && flutter pub get'; then
               echo "init ok (attempt $attempt)"; exit 0
             fi
             echo "::warning::init failed (attempt $attempt), retry"
             rm -rf ohos pubspec_overrides.yaml pubspec.lock
-            sleep 30
+            sleep 10
           done
           exit 1
       - name: Build HAP
@@ -139,10 +149,13 @@ jobs:
           java -jar "$SIGN_JAR" sign-app -mode localSign -keyAlias tuxuejieda -keyPwd "$KS_PASS" -appCertFile signing/chain.cer -profileFile signing/app.p7b -inForm zip -signAlg SHA256withECDSA -keystoreFile signing/ohos_release.p12 -keystorePwd "$KS_PASS" -inFile "dist/tuxuejieda-HarmonyOS-${{ inputs.version }}-unsigned.app" -outFile "tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app"
           java -jar "$SIGN_JAR" verify-app -inFile "tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app" -outCertChain signed/cert-chain.cer -outProfile signed/profile.p7b || true
           ls -la *.app
-      - name: Pack .app into tar.gz (artifacts extract zips, which would drop the signature block)
+      - name: Pack .app and .hap into tar.gz (artifacts extract zips, which would drop the signature block)
         run: |
           set -e
-          tar czf "tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app.tar.gz"             "tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app"
+          cp signed/entry-default-signed.hap "tuxuejieda-HarmonyOS-arm64-${{ inputs.version }}-release.hap"
+          tar czf "tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app.tar.gz" \
+            "tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app" \
+            "tuxuejieda-HarmonyOS-arm64-${{ inputs.version }}-release.hap"
           ls -la *.tar.gz
       - uses: actions/upload-artifact@v7
         with:
