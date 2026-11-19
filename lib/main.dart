@@ -57,7 +57,7 @@ class _TuxueJiedaAppState extends State<TuxueJiedaApp> {
       listenable: _repo,
       builder: (context, _) {
         return MaterialApp(
-          title: '图学基础教程习题解答',
+          title: '图学习题解答',
           debugShowCheckedModeBanner: false,
           themeMode: _repo.themeMode,
           theme: ThemeData(

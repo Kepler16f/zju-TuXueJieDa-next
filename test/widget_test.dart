@@ -166,7 +166,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: HomePage(repo: repo)));
     await tester.pumpAndSettle();
 
-    expect(find.text('图学基础教程习题解答'), findsOneWidget);
+    expect(find.text('图学习题解答'), findsOneWidget);
     expect(find.text('已启用 177 题'), findsOneWidget);
     expect(find.text('配套动画 67 题'), findsOneWidget);
     expect(find.text('第 11 页第 1 题'), findsOneWidget);

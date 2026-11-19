@@ -359,7 +359,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '图学基础教程习题解答',
+                                    '图学习题解答',
                                     style: theme.textTheme.titleMedium
                                         ?.copyWith(fontWeight: FontWeight.w700),
                                   ),

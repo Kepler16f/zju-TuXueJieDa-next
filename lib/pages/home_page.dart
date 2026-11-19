@@ -162,7 +162,7 @@ class _HomePageState extends State<HomePage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '图学基础教程习题解答',
+                        '图学习题解答',
                         style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
                         overflow: TextOverflow.ellipsis,
                       ),
