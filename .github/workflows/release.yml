@@ -466,9 +466,23 @@ jobs:
             "tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app"
           ls -la *.tar.gz
       - uses: actions/upload-artifact@v7
+        if: env.HAVE_SIGNING == 'true'
         with:
-          name: ohos-packages
-          path: tuxuejieda-HarmonyOS-*
+          name: ohos-hap-release
+          path: tuxuejieda-HarmonyOS-arm64-*-release.hap
+          archive: false
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        if: env.HAVE_SIGNING == 'true'
+        with:
+          name: ohos-app-release
+          path: tuxuejieda-HarmonyOS-*-release.app.tar.gz
+          archive: false
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ohos-hap-unsigned
+          path: tuxuejieda-HarmonyOS-arm64-*-unsigned.hap
           archive: false
           if-no-files-found: error
 
