@@ -89,19 +89,16 @@ jobs:
         with:
           name: android-apk-arm64-v8a
           path: stage/tuxuejieda-Android-arm64-v8a-*.apk
-          archive: false
           if-no-files-found: error
       - uses: actions/upload-artifact@v7
         with:
           name: android-apk-armeabi-v7a
           path: stage/tuxuejieda-Android-armeabi-v7a-*.apk
-          archive: false
           if-no-files-found: error
       - uses: actions/upload-artifact@v7
         with:
           name: android-apk-x86_64
           path: stage/tuxuejieda-Android-x86_64-*.apk
-          archive: false
           if-no-files-found: error
 
   windows:
@@ -170,7 +167,6 @@ jobs:
         with:
           name: windows-installer-${{ matrix.arch }}
           path: stage/*.exe
-          archive: false
           if-no-files-found: error
 
   macos:
@@ -206,7 +202,6 @@ jobs:
         with:
           name: macos-dmg
           path: tuxuejieda-macOS-arm64-*.dmg
-          archive: false
           if-no-files-found: error
 
   linux:
@@ -272,7 +267,6 @@ jobs:
         with:
           name: linux-deb-${{ matrix.arch }}
           path: tuxuejieda_*.deb
-          archive: false
           if-no-files-found: error
 
   ios:
@@ -303,7 +297,6 @@ jobs:
         with:
           name: ios-ipa
           path: tuxuejieda-iOS-*-unsigned.ipa
-          archive: false
           if-no-files-found: error
 
   ohos:
@@ -470,20 +463,17 @@ jobs:
         with:
           name: ohos-hap-release
           path: tuxuejieda-HarmonyOS-arm64-*-release.hap
-          archive: false
           if-no-files-found: error
       - uses: actions/upload-artifact@v7
         if: env.HAVE_SIGNING == 'true'
         with:
           name: ohos-app-release
           path: tuxuejieda-HarmonyOS-*-release.app.tar.gz
-          archive: false
           if-no-files-found: error
       - uses: actions/upload-artifact@v7
         with:
           name: ohos-hap-unsigned
           path: tuxuejieda-HarmonyOS-arm64-*-unsigned.hap
-          archive: false
           if-no-files-found: error
 
   web:
@@ -512,7 +502,6 @@ jobs:
         with:
           name: web-bundle
           path: tuxuejieda-Web-*.zip
-          archive: false
           if-no-files-found: error
 
   release:
@@ -532,8 +521,6 @@ jobs:
       - name: Download build artifacts
         uses: actions/download-artifact@v7
         with:
-          # v7 archive:false 的 artifact 名 = 上传文件名（name 参数被忽略）
-          pattern: "tuxuejieda*"
           path: stage
           merge-multiple: true
       - name: Checksums
