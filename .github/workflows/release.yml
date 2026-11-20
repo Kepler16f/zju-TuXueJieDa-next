@@ -352,10 +352,29 @@ jobs:
           path: ~/.pub-cache/git
           key: ohos-pub-git-v1-${{ hashFiles('scripts/setup_ohos.sh') }}
           restore-keys: ohos-pub-git-v1-
+      - name: Prepare signing material
+        env:
+          KS_PASS: ${{ secrets.OHOS_KEYSTORE_PASSWORD }}
+          KS_B64: ${{ secrets.OHOS_KEYSTORE_BASE64 }}
+          CERT_B64: ${{ secrets.OHOS_CERT_BASE64 }}
+          PROFILE_B64: ${{ secrets.OHOS_PROFILE_BASE64 }}
+        run: |
+          set -e
+          if [ -n "$KS_PASS" ] && [ -n "$KS_B64" ] && [ -n "$CERT_B64" ] && [ -n "$PROFILE_B64" ]; then
+            mkdir -p signing
+            echo "$KS_B64" | base64 -d > signing/ohos_release.p12
+            echo "$CERT_B64" | base64 -d > signing/chain.cer
+            echo "$PROFILE_B64" | base64 -d > signing/app.p7b
+            echo "HAVE_SIGNING=true" >> "$GITHUB_ENV"
+            ls -la signing/
+          else
+            echo "HAVE_SIGNING=false" >> "$GITHUB_ENV"
+          fi
       - name: Init OHOS host project + plugin overlay
         env:
           OHOS_APP_VERSION: ${{ inputs.version }}
           OHOS_BUILD_NUMBER: ${{ inputs.build_number }}
+          OHOS_DEVELOPER: 胡天泽
           GIT_TERMINAL_PROMPT: "0"
         run: |
           python3 -m pip install --quiet --disable-pip-version-check pillow
@@ -375,7 +394,7 @@ jobs:
           done
           echo "::error::ohos init failed after 5 attempts"
           exit 1
-      - name: Build HAP (unsigned fallback)
+      - name: Build HAP
         run: |
           set +e
           flutter build hap --release --target-platform ohos-arm64
@@ -393,10 +412,63 @@ jobs:
           # SIG dev 引擎的 libflutter.so 未剥离符号：strip 后重打 HAP（约省 4-6MB）
           python3 scripts/strip_hap_libs.py "$hap" libs/arm64-v8a/libflutter.so
           cp "$hap" "tuxuejieda-HarmonyOS-arm64-${{ inputs.version }}-unsigned.hap"
+      - name: Sign HAP
+        if: env.HAVE_SIGNING == 'true'
+        env:
+          KS_PASS: ${{ secrets.OHOS_KEYSTORE_PASSWORD }}
+        run: |
+          set -e
+          SIGN_JAR=$(find /home/runner/ohos-sdk -iname "hap-sign-tool*.jar" -type f | head -1)
+          echo "sign tool: $SIGN_JAR"
+          HAP=$(find ohos -name '*.hap' -type f | head -1)
+          if [ -z "$HAP" ]; then echo "::error::no hap produced"; exit 1; fi
+          mkdir -p signed
+          java -jar "$SIGN_JAR" sign-app -mode localSign -keyAlias tuxuejieda -keyPwd "$KS_PASS" -signAlg SHA256withECDSA -keystoreFile signing/ohos_release.p12 -keystorePwd "$KS_PASS" -appCertFile signing/chain.cer -profileFile signing/app.p7b -profileSigned 1 -compatibleVersion 12 -inFile "$HAP" -outFile signed/entry-default-signed.hap
+          java -jar "$SIGN_JAR" verify-app -inFile signed/entry-default-signed.hap -outCertChain signed/cert-chain.cer -outProfile signed/profile.p7b
+          cp signed/entry-default-signed.hap "tuxuejieda-HarmonyOS-arm64-${{ inputs.version }}-release.hap"
+          ls -la signed/
+      - name: Locate packing tool
+        if: env.HAVE_SIGNING == 'true'
+        run: |
+          PACK_TOOL=$(find /home/runner/ohos-sdk -maxdepth 8 -type f -name 'app_packing_tool.jar' | head -1)
+          echo "pack tool: $PACK_TOOL"
+          if [ -z "$PACK_TOOL" ]; then
+            echo "::error::app_packing_tool.jar not found"
+            find /home/runner/ohos-sdk -name '*.jar' | head -30
+            exit 1
+          fi
+          echo "PACK_TOOL=$PACK_TOOL" >> "$GITHUB_ENV"
+      - name: Assemble and sign .app
+        if: env.HAVE_SIGNING == 'true'
+        env:
+          KS_PASS: ${{ secrets.OHOS_KEYSTORE_PASSWORD }}
+        run: |
+          set -e
+          SIGN_JAR=$(find /home/runner/ohos-sdk -iname "hap-sign-tool*.jar" -type f | head -1)
+          mkdir -p dist
+          cp signed/entry-default-signed.hap dist/entry-default.hap
+          unzip -p signed/entry-default-signed.hap pack.info > dist/pack.info
+          python3 scripts/patch_pack_info.py dist/pack.info entry-default.hap
+          java -jar "$PACK_TOOL" --mode app \
+            --pack-info-path dist/pack.info \
+            --hap-path dist/entry-default.hap \
+            --out-path "dist/tuxuejieda-HarmonyOS-${{ inputs.version }}-unsigned.app" \
+            --replace-pack-info false --force true
+          ls -la dist/
+          java -jar "$SIGN_JAR" sign-app -mode localSign -keyAlias tuxuejieda -keyPwd "$KS_PASS" -appCertFile signing/chain.cer -profileFile signing/app.p7b -inForm zip -signAlg SHA256withECDSA -keystoreFile signing/ohos_release.p12 -keystorePwd "$KS_PASS" -inFile "dist/tuxuejieda-HarmonyOS-${{ inputs.version }}-unsigned.app" -outFile "tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app"
+          java -jar "$SIGN_JAR" verify-app -inFile "tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app" -outCertChain signed/cert-chain.cer -outProfile signed/profile.p7b || true
+          ls -la *.app
+      - name: Pack .app into tar.gz (artifacts extract zips, which would drop the signature block)
+        if: env.HAVE_SIGNING == 'true'
+        run: |
+          set -e
+          tar czf "tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app.tar.gz" \
+            "tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app"
+          ls -la *.tar.gz
       - uses: actions/upload-artifact@v7
         with:
-          name: ohos-hap
-          path: tuxuejieda-HarmonyOS-arm64-*-unsigned.hap
+          name: ohos-packages
+          path: tuxuejieda-HarmonyOS-*
           archive: false
           if-no-files-found: error
 
@@ -447,14 +519,14 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           # v7 archive:false 的 artifact 名 = 上传文件名（name 参数被忽略）
-          pattern: "tuxuejieda-*"
+          pattern: "tuxuejieda*"
           path: stage
           merge-multiple: true
       - name: Checksums
         run: |
           cd stage
           files=()
-          for f in *.apk *.exe *.dmg *.deb *.hap *.ipa *.zip; do [ -e "$f" ] && files+=("$f"); done
+          for f in *.apk *.exe *.dmg *.deb *.hap *.ipa *.zip *.tar.gz; do [ -e "$f" ] && files+=("$f"); done
           sha256sum "${files[@]}" > SHA256SUMS.txt
       - name: Publish release (gh CLI)
         env:
@@ -480,7 +552,9 @@ jobs:
             echo "- macOS 为 dmg（未签名）：首次打开需右键 → 打开，或执行 xattr -cr"
             echo "- iOS IPA 未签名：需自签（AltStore/Sideloadly/TrollStore 等）后安装"
             echo "- Linux 为 deb 包（x64/amd64 与 arm64），安装后从应用菜单启动；视频播放暂未支持"
-            echo "- 鸿蒙 HAP 未签名：需 DevEco Studio 签名后安装"
+            echo "- 鸿蒙端：包含已签名的 release.hap（直接侧载安装）、未签名 unsigned.hap，以及 release.app.tar.gz（用于华为 AGC 上架），应用名统一为「图学习题解答」"
+            echo "- Windows 安装包：包含 arm64 与 x64 架构"
+            echo "- Web 端：解压即用的网页端静态资源包"
             echo "- SHA256SUMS.txt 为上述产物的校验和"
             echo "- 非官方学生重制项目，仅供个人学习交流；原内容版权归原出版方所有。"
           } > notes.md
