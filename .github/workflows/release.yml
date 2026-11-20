@@ -548,6 +548,8 @@ jobs:
       - name: Checksums
         run: |
           cd stage
+          # Exclude raw .app from release assets since GitHub Releases API rejects .app extension
+          rm -f *.app
           files=()
           for f in *.apk *.exe *.dmg *.deb *.hap *.ipa *.zip *.tar.gz; do [ -e "$f" ] && files+=("$f"); done
           sha256sum "${files[@]}" > SHA256SUMS.txt
@@ -564,7 +566,7 @@ jobs:
             echo ""
             echo "| 平台 | 产物 |"
             echo "|---|---|"
-            for f in $(ls | grep -v SHA256SUMS | sort); do
+            for f in $(ls stage | grep -v SHA256SUMS | sort); do
               echo "| - | $f |"
             done
             echo ""
