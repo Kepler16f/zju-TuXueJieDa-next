@@ -396,6 +396,7 @@ jobs:
           exit 1
       - name: Build HAP
         run: |
+          python3 scripts/patch_ohos_devices.py all .
           set +e
           flutter build hap --release --target-platform ohos-arm64
           status=$?

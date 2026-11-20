@@ -86,6 +86,9 @@ for p in string_files:
     print(f"label -> {TARGET_LABEL} in {p}")
 PY
 
+# 华为官方全端设备声明（手机 phone、平板 tablet、PC/二合一 2in1）及多窗口模式
+python3 scripts/patch_ohos_devices.py entry .
+
 # 图标：AGC 审核要求「单层图」为 1024x1024、方角、无透明像素。
 # 使用 tools/app_icon_square_1024.png（RGB 无 alpha、方角铺满的品牌渐变底）
 # 以 1024x1024 覆盖 AppScope/app_icon.png 与 entry 各语言 media/icon.png。

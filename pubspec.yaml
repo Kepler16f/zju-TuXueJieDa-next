@@ -1,7 +1,7 @@
 name: tuxuejieda_next
 description: "《图学基础教程习题解答》跨平台现代重构版（含 177 道激活题、分步图解与视频动画）"
 publish_to: 'none'
-version: 0.1.8+14
+version: 0.1.8+15
 
 environment:
   sdk: ">=3.13.5 <4.0.0"  # 下限取自鸿蒙 fork oh-3.47.9-dev（Dart 3.13.5）
