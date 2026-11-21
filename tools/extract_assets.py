@@ -961,6 +961,16 @@ def _is_white_cover_patch(img: Image.Image, target_sz: tuple[int, int]) -> bool:
     vivid too, while a genuine cover has none — so a tiny absolute vivid-pixel
     budget cleanly separates them (measured on jieP35_41: cover vivid=0,
     base vivid≈20k, 'X' strokes vivid≈1.3k).
+
+    Vivid only guards *colored* content, though: black/gray content (answer
+    hatching, diagonal answer lines, digit labels) has no channel spread and
+    low luminance, so it slips past the vivid budget. Guard those by dark
+    pixel *placement*: a genuine cover's dark pixels can only be its 1-2px
+    border hugging the sprite edges (≥90% within the outer 2px band), while
+    content strokes run through the middle of the bitmap (measured:
+    jieP18_11 mem17 diagonal line 8.4% dark with 60%+ interior dark pixels;
+    jieP27_26 mem27 digit "2'" centered; genuine cover jieP77_29 mem3 border
+    2.3% dark, ~100% on the band).
     """
     if target_sz[0] * target_sz[1] > 0.5 * STAGE_W * STAGE_H:
         return False
@@ -970,17 +980,36 @@ def _is_white_cover_patch(img: Image.Image, target_sz: tuple[int, int]) -> bool:
     total = img.width * img.height
     if sum(alpha[250:]) / total < 0.90:
         return False
-    white = vivid = 0
-    buf = img.convert("RGB").tobytes()
-    for i in range(0, len(buf), 3):
-        r, g, b = buf[i], buf[i + 1], buf[i + 2]
-        if r >= 225 and g >= 225 and b >= 225:
-            white += 1
-        elif max(r, g, b) - min(r, g, b) > 30 or (r * 299 + g * 587 + b * 114) // 1000 > 240:
-            vivid += 1
-            if vivid > 30:
-                return False
-    return white / total >= 0.90 and vivid <= 30
+
+    arr = np.asarray(img)
+    r = arr[:, :, 0].astype(np.int32)
+    g = arr[:, :, 1].astype(np.int32)
+    b = arr[:, :, 2].astype(np.int32)
+    opaque = arr[:, :, 3] > 200
+    white = (r >= 225) & (g >= 225) & (b >= 225) & opaque
+    if int(white.sum()) / total < 0.90:
+        return False
+
+    spread = np.maximum(np.maximum(r, g), b) - np.minimum(np.minimum(r, g), b)
+    lum = (r * 299 + g * 587 + b * 114) // 1000
+    vivid = (spread > 30) | (lum > 240)
+    vivid_n = int((vivid & opaque & ~white).sum())
+    if vivid_n > 30:
+        return False
+
+    # Dark-pixel placement guard (see docstring): content strokes vs border.
+    dark = (~white) & (lum < 128) & opaque
+    dark_n = int(dark.sum())
+    if dark_n:
+        band = np.zeros_like(dark)
+        band[:2, :] = True
+        band[-2:, :] = True
+        band[:, :2] = True
+        band[:, -2:] = True
+        on_band = int((dark & band).sum())
+        if on_band < dark_n * 0.90:
+            return False
+    return True
 
 
 def extract_jieti_steps(
