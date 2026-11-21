@@ -65,7 +65,7 @@ class _AppShellState extends State<AppShell> {
     if (PlatformCaps.isWeb) return;
     if (PlatformCaps.isWindows) {
       await WindowChannel.setCloseToTray(widget.repo.closeToTray);
-    } else if (PlatformCaps.isAndroid) {
+    } else if (PlatformCaps.isAndroid || PlatformCaps.isOhos) {
       await OrientationService.apply(followSensor: widget.repo.followSensor);
     }
   }

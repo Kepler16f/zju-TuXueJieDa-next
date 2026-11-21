@@ -238,7 +238,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       ],
                     ),
                   ),
-                  if (_isWindows || _isAndroid) ...[
+                  if (_isWindows || _isAndroid || _isOhos) ...[
                     const _SectionHeader('窗口与屏幕'),
                     _SettingsCard(
                       child: Column(
@@ -254,11 +254,11 @@ class _SettingsPageState extends State<SettingsPage> {
                                 WindowChannel.setCloseToTray(value);
                               },
                             ),
-                          if (_isAndroid)
+                          if (_isAndroid || _isOhos)
                             SwitchListTile(
                               contentPadding: EdgeInsets.zero,
                               title: const Text('跟随重力感应自动旋转'),
-                              subtitle: const Text('关闭后锁定为竖屏显示'),
+                              subtitle: const Text('开启后允许横屏显示，关闭则锁定为竖屏'),
                               value: repo.followSensor,
                               onChanged: (value) {
                                 repo.setFollowSensor(value);

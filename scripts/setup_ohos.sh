@@ -28,6 +28,28 @@ sed -i -E "s/\"vendor\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"vendor\": \"$OHOS_D
 sed -i -E "s/\"versionName\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"versionName\": \"$OHOS_APP_VERSION\"/" ohos/AppScope/app.json5
 sed -i -E "s/\"versionCode\"[[:space:]]*:[[:space:]]*[0-9]+/\"versionCode\": $OHOS_BUILD_NUMBER/" ohos/AppScope/app.json5
 
+# 横屏适配：ability 方向声明改为 auto_rotation（跟随系统旋转），
+# 运行期由 Flutter SystemChrome.setPreferredOrientations 按用户开关细分。
+python3 - <<'PY'
+import io
+import os
+import re
+
+p = "ohos/entry/src/main/module.json5"
+if os.path.isfile(p):
+    text = io.open(p, encoding="utf-8").read()
+    if '"orientation"' in text:
+        text = re.sub(
+            r'"orientation"\s*:\s*"[^"]*"',
+            '"orientation": "auto_rotation"',
+            text,
+        )
+        io.open(p, "w", encoding="utf-8", newline="\n").write(text)
+        print("module.json5 orientation -> auto_rotation")
+    else:
+        print("module.json5 has no orientation field (defaults to unspecified)")
+PY
+
 # 应用名：launcher 显示名来自 entry 模块各语言目录下 string.json 中的 EntryAbility_label
 #（OpenHarmony/HarmonyOS 模板同时生成 base / zh_CN / en_US 三套资源，中文系统优先读取 zh_CN；
 # 仅改 base 会导致中文桌面仍然显示 Tuxuejieda_next。）
