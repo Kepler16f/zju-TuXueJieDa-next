@@ -1048,49 +1048,20 @@ def extract_jieti_steps(
             if 1 <= fidx <= len(frames) and lbl in tab_overrides:
                 key_frames.append(fidx)
     else:
-        # Simulate Macromedia Director 8.5 playback state machine:
-        #   1. Play from frame 1 until the first `go to the frame` wait frame.
-        #   2. While the current frame has a Next button (`go to next`), jump to
-        #      the next VWLB marker strictly after `cur_f` and play forward until
-        #      the next `go to the frame` wait frame.
-        # This skips unreachable leftover template wait frames (where markers
-        # were deleted by the author, e.g. 70_17 f20..f29, 56_9 f14..f29,
-        # 63_10_15 f23..f29, 69_16 f26, etc.) and transient non-wait marker
-        # frames (e.g. 32_35_2 f4 -> f5, 60_10_8 f5 -> f6).
+        # v0.1.6 semantics (user-verified baseline): every `go to the frame`
+        # wait plus every VWLB marker is a step. A Director `go to next`
+        # button would jump straight to the next marker, but the waits whose
+        # markers the author deleted still carry real progressive line work —
+        # verified visually (jieP77_29 f29 erases the A-A arrow stubs,
+        # jieP70_17 f20..f29 draw thread lines then wipe construction lines).
+        # Treating those as unreachable leftovers drops real answer steps
+        # (85页第2题丢一步), so keep wait ∪ labels.
         n_frames = len(frames)
-        valid_markers = sorted(f for f in labels.keys() if 1 <= f <= n_frames)
-
-        def _advance_to_wait(start_f: int) -> int:
-            f = start_f
-            while f <= n_frames:
-                if f in wait_frames:
-                    return f
-                f += 1
-            return n_frames
-
-        def _has_next_button(fi: int) -> bool:
-            fr = frames[fi - 1]
-            for ch, rec in fr.items():
-                if ch < 6 or rec[0] == 0:
-                    continue
-                sid = struct.unpack(">H", rec[10:12])[0]
-                for _, bm in spans.get(sid, []):
-                    scr = members.get(bm, {}).get("script", "").lower()
-                    if "go to next" in scr or "go next" in scr:
-                        return True
-            return False
-
         seen_f: set[int] = set()
-        cur_f = _advance_to_wait(1)
-        while 1 <= cur_f <= n_frames and cur_f not in seen_f:
-            seen_f.add(cur_f)
-            key_frames.append(cur_f)
-            if not _has_next_button(cur_f):
-                break
-            next_markers = [m for m in valid_markers if m > cur_f]
-            if not next_markers:
-                break
-            cur_f = _advance_to_wait(next_markers[0])
+        for fidx in range(1, n_frames + 1):
+            if (fidx in wait_frames or fidx in labels) and fidx not in seen_f:
+                seen_f.add(fidx)
+                key_frames.append(fidx)
 
     # Decode member bitmaps cache per .dir file
     bmp_cache: dict[int, Image.Image | None] = {}
