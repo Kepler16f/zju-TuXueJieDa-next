@@ -192,14 +192,8 @@
         },
         {
           "index": 10,
-          "title": "第 9 步",
-          "image": "assets/steps/13_2_10.webp",
-          "note": ""
-        },
-        {
-          "index": 11,
           "title": "最终答案",
-          "image": "assets/steps/13_2_11.webp",
+          "image": "assets/steps/13_2_10.webp",
           "note": ""
         }
       ],
@@ -510,14 +504,8 @@
         },
         {
           "index": 5,
-          "title": "第 4 步",
-          "image": "assets/steps/16_8_05.webp",
-          "note": ""
-        },
-        {
-          "index": 6,
           "title": "最终答案",
-          "image": "assets/steps/16_8_06.webp",
+          "image": "assets/steps/16_8_05.webp",
           "note": ""
         }
       ],
@@ -608,14 +596,8 @@
         },
         {
           "index": 5,
-          "title": "第 4 步",
-          "image": "assets/steps/17_10_05.webp",
-          "note": ""
-        },
-        {
-          "index": 6,
           "title": "最终答案",
-          "image": "assets/steps/17_10_06.webp",
+          "image": "assets/steps/17_10_05.webp",
           "note": ""
         }
       ],
@@ -3960,14 +3942,8 @@
         },
         {
           "index": 9,
-          "title": "第 8 步",
-          "image": "assets/steps/50_3_1_09.webp",
-          "note": ""
-        },
-        {
-          "index": 10,
           "title": "最终答案",
-          "image": "assets/steps/50_3_1_10.webp",
+          "image": "assets/steps/50_3_1_09.webp",
           "note": ""
         }
       ],
@@ -4212,14 +4188,8 @@
         },
         {
           "index": 10,
-          "title": "第 9 步",
-          "image": "assets/steps/54_7_10.webp",
-          "note": ""
-        },
-        {
-          "index": 11,
           "title": "最终答案",
-          "image": "assets/steps/54_7_11.webp",
+          "image": "assets/steps/54_7_10.webp",
           "note": ""
         }
       ],
@@ -4392,7 +4362,7 @@
       "statement": "已知主视图和俯视图，画全左视图。",
       "subjectImage": "assets/subjects/50_26n.jpg",
       "answerImage": "assets/answers/50_26n.jpg",
-      "jietiMode": "stepped",
+      "jietiMode": "two_state",
       "steps": [
         {
           "index": 1,
@@ -4402,14 +4372,8 @@
         },
         {
           "index": 2,
-          "title": "第 1 步",
+          "title": "完整答案",
           "image": "assets/steps/50_26n_02.webp",
-          "note": ""
-        },
-        {
-          "index": 3,
-          "title": "最终答案",
-          "image": "assets/steps/50_26n_03.webp",
           "note": ""
         }
       ],
@@ -4608,7 +4572,7 @@
       "statement": "由两视图画第三视图（对以下四题加以比较分析）。",
       "subjectImage": "assets/subjects/52_2n.png",
       "answerImage": "assets/answers/52_2n.png",
-      "jietiMode": "stepped",
+      "jietiMode": "two_state",
       "steps": [
         {
           "index": 1,
@@ -4618,14 +4582,8 @@
         },
         {
           "index": 2,
-          "title": "第 1 步",
+          "title": "完整答案",
           "image": "assets/steps/52_2n_02.webp",
-          "note": ""
-        },
-        {
-          "index": 3,
-          "title": "最终答案",
-          "image": "assets/steps/52_2n_03.webp",
           "note": ""
         }
       ],
@@ -4670,7 +4628,7 @@
       "statement": "由两视图画第三视图（对以下四题加以比较分析）。",
       "subjectImage": "assets/subjects/52_4n.png",
       "answerImage": "assets/answers/52_4n.png",
-      "jietiMode": "stepped",
+      "jietiMode": "two_state",
       "steps": [
         {
           "index": 1,
@@ -4680,14 +4638,8 @@
         },
         {
           "index": 2,
-          "title": "第 1 步",
+          "title": "完整答案",
           "image": "assets/steps/52_4n_02.webp",
-          "note": ""
-        },
-        {
-          "index": 3,
-          "title": "最终答案",
-          "image": "assets/steps/52_4n_03.webp",
           "note": ""
         }
       ],
@@ -4750,14 +4702,8 @@
         },
         {
           "index": 8,
-          "title": "第 7 步",
-          "image": "assets/steps/58_10_4_08.webp",
-          "note": ""
-        },
-        {
-          "index": 9,
           "title": "最终答案",
-          "image": "assets/steps/58_10_4_09.webp",
+          "image": "assets/steps/58_10_4_08.webp",
           "note": ""
         }
       ],
@@ -5070,14 +5016,8 @@
         },
         {
           "index": 10,
-          "title": "第 9 步",
-          "image": "assets/steps/60_10_8_10.webp",
-          "note": ""
-        },
-        {
-          "index": 11,
           "title": "最终答案",
-          "image": "assets/steps/60_10_8_11.webp",
+          "image": "assets/steps/60_10_8_10.webp",
           "note": ""
         }
       ],
@@ -5372,20 +5312,8 @@
         },
         {
           "index": 8,
-          "title": "第 7 步",
-          "image": "assets/steps/62_10_12_08.webp",
-          "note": ""
-        },
-        {
-          "index": 9,
-          "title": "第 8 步",
-          "image": "assets/steps/62_10_12_09.webp",
-          "note": ""
-        },
-        {
-          "index": 10,
           "title": "最终答案",
-          "image": "assets/steps/62_10_12_10.webp",
+          "image": "assets/steps/62_10_12_08.webp",
           "note": ""
         }
       ],
@@ -6714,7 +6642,7 @@
       "statement": " 看懂三视图，补齐六视图。",
       "subjectImage": "assets/subjects/74n.jpg",
       "answerImage": "assets/answers/74n.jpg",
-      "jietiMode": "stepped",
+      "jietiMode": "two_state",
       "steps": [
         {
           "index": 1,
@@ -6724,14 +6652,8 @@
         },
         {
           "index": 2,
-          "title": "第 1 步",
+          "title": "完整答案",
           "image": "assets/steps/74n_02.webp",
-          "note": ""
-        },
-        {
-          "index": 3,
-          "title": "最终答案",
-          "image": "assets/steps/74n_03.webp",
           "note": ""
         }
       ],
@@ -6748,7 +6670,7 @@
       "statement": "根据所给两视图，参照轴测图，画出A向局部视图。",
       "subjectImage": "assets/subjects/75_10n.jpg",
       "answerImage": "assets/answers/75_10n.jpg",
-      "jietiMode": "stepped",
+      "jietiMode": "two_state",
       "steps": [
         {
           "index": 1,
@@ -6758,14 +6680,8 @@
         },
         {
           "index": 2,
-          "title": "第 1 步",
+          "title": "完整答案",
           "image": "assets/steps/75_10n_02.webp",
-          "note": ""
-        },
-        {
-          "index": 3,
-          "title": "最终答案",
-          "image": "assets/steps/75_10n_03.webp",
           "note": ""
         }
       ],
@@ -6908,20 +6824,8 @@
         },
         {
           "index": 9,
-          "title": "第 8 步",
-          "image": "assets/steps/69_16_09.webp",
-          "note": ""
-        },
-        {
-          "index": 10,
-          "title": "第 9 步",
-          "image": "assets/steps/69_16_10.webp",
-          "note": ""
-        },
-        {
-          "index": 11,
           "title": "最终答案",
-          "image": "assets/steps/69_16_11.webp",
+          "image": "assets/steps/69_16_09.webp",
           "note": ""
         }
       ],
@@ -6994,14 +6898,8 @@
         },
         {
           "index": 9,
-          "title": "第 8 步",
-          "image": "assets/steps/70_17_09.webp",
-          "note": ""
-        },
-        {
-          "index": 10,
           "title": "最终答案",
-          "image": "assets/steps/70_17_10.webp",
+          "image": "assets/steps/70_17_09.webp",
           "note": ""
         }
       ],
@@ -7254,20 +7152,8 @@
         },
         {
           "index": 12,
-          "title": "第 11 步",
-          "image": "assets/steps/72_20_1_12.webp",
-          "note": ""
-        },
-        {
-          "index": 13,
-          "title": "第 12 步",
-          "image": "assets/steps/72_20_1_13.webp",
-          "note": ""
-        },
-        {
-          "index": 14,
           "title": "最终答案",
-          "image": "assets/steps/72_20_1_14.webp",
+          "image": "assets/steps/72_20_1_12.webp",
           "note": ""
         }
       ],
@@ -7340,20 +7226,8 @@
         },
         {
           "index": 9,
-          "title": "第 8 步",
-          "image": "assets/steps/72_20_2_09.webp",
-          "note": ""
-        },
-        {
-          "index": 10,
-          "title": "第 9 步",
-          "image": "assets/steps/72_20_2_10.webp",
-          "note": ""
-        },
-        {
-          "index": 11,
           "title": "最终答案",
-          "image": "assets/steps/72_20_2_11.webp",
+          "image": "assets/steps/72_20_2_09.webp",
           "note": ""
         }
       ],
@@ -7462,14 +7336,8 @@
         },
         {
           "index": 15,
-          "title": "第 14 步",
-          "image": "assets/steps/73_21_15.webp",
-          "note": ""
-        },
-        {
-          "index": 16,
           "title": "最终答案",
-          "image": "assets/steps/73_21_16.webp",
+          "image": "assets/steps/73_21_15.webp",
           "note": ""
         }
       ],
@@ -7554,14 +7422,8 @@
         },
         {
           "index": 11,
-          "title": "第 10 步",
-          "image": "assets/steps/73_22_11.webp",
-          "note": ""
-        },
-        {
-          "index": 12,
           "title": "最终答案",
-          "image": "assets/steps/73_22_12.webp",
+          "image": "assets/steps/73_22_11.webp",
           "note": ""
         }
       ],
@@ -7634,20 +7496,8 @@
         },
         {
           "index": 9,
-          "title": "第 8 步",
-          "image": "assets/steps/74_23_09.webp",
-          "note": ""
-        },
-        {
-          "index": 10,
-          "title": "第 9 步",
-          "image": "assets/steps/74_23_10.webp",
-          "note": ""
-        },
-        {
-          "index": 11,
           "title": "最终答案",
-          "image": "assets/steps/74_23_11.webp",
+          "image": "assets/steps/74_23_09.webp",
           "note": ""
         }
       ],
@@ -7874,14 +7724,8 @@
         },
         {
           "index": 15,
-          "title": "第 14 步",
-          "image": "assets/steps/75_26_15.webp",
-          "note": ""
-        },
-        {
-          "index": 16,
           "title": "最终答案",
-          "image": "assets/steps/75_26_16.webp",
+          "image": "assets/steps/75_26_15.webp",
           "note": ""
         }
       ],
@@ -7960,14 +7804,8 @@
         },
         {
           "index": 10,
-          "title": "第 9 步",
-          "image": "assets/steps/76_27_10.webp",
-          "note": ""
-        },
-        {
-          "index": 11,
           "title": "最终答案",
-          "image": "assets/steps/76_27_11.webp",
+          "image": "assets/steps/76_27_10.webp",
           "note": ""
         }
       ],
@@ -8120,20 +7958,8 @@
         },
         {
           "index": 9,
-          "title": "第 8 步",
-          "image": "assets/steps/77_29_09.webp",
-          "note": ""
-        },
-        {
-          "index": 10,
-          "title": "第 9 步",
-          "image": "assets/steps/77_29_10.webp",
-          "note": ""
-        },
-        {
-          "index": 11,
           "title": "最终答案",
-          "image": "assets/steps/77_29_11.webp",
+          "image": "assets/steps/77_29_09.webp",
           "note": ""
         }
       ],
@@ -9026,7 +8852,7 @@
       "statement": "（1） 分析左图中表面粗糙度的错误标注，在右图中重新标注（其余表面的Ra值为12.5）。",
       "subjectImage": "assets/subjects/100_1n.jpg",
       "answerImage": "assets/answers/100_1n.jpg",
-      "jietiMode": "stepped",
+      "jietiMode": "two_state",
       "steps": [
         {
           "index": 1,
@@ -9036,14 +8862,8 @@
         },
         {
           "index": 2,
-          "title": "第 1 步",
+          "title": "完整答案",
           "image": "assets/steps/100_1n_02.webp",
-          "note": ""
-        },
-        {
-          "index": 3,
-          "title": "最终答案",
-          "image": "assets/steps/100_1n_03.webp",
           "note": ""
         }
       ],

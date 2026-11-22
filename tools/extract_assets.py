@@ -1254,6 +1254,39 @@ def extract_jieti_steps(
             }
         )
 
+    # Drop cleanup-only pause frames. A pause whose only visible change is a
+    # TINY erasure (author's white-out trim / a couple of guide strokes, e.g.
+    # jieP77_29 f14 trims arc segments, f29 erases bore guides) adds nothing
+    # but makes the step slider look like the previous step played backwards
+    # (用户："两步重复并且被倒放"). Large erase steps (擦构造线, thousands of
+    # pixels, e.g. jieP35_41) are genuine drafting steps and stay. Compare
+    # against the last KEPT step so the erasure carries into the next step.
+    # Tabbed views stay untouched.
+    if not is_tabbed:
+        last_step = steps_raw[-1] if steps_raw else None
+        kept_steps: list[dict[str, Any]] = []
+        for st in steps_raw:
+            if kept_steps:
+                prev_a = np.asarray(kept_steps[-1]["image"], dtype=np.uint8)
+                cur_a = np.asarray(st["image"], dtype=np.uint8)
+                prev_ink = (prev_a < 200).any(axis=2)
+                cur_ink = (cur_a < 200).any(axis=2)
+                added = int((cur_ink & ~prev_ink).sum())
+                removed = int((~cur_ink & prev_ink).sum())
+                if added == 0 and removed == 0:
+                    continue  # now identical to the last kept step
+                if (
+                    removed > 0
+                    and added < 50
+                    and removed <= 300
+                    and st is not last_step  # the final answer always stays
+                ):
+                    if os.environ.get("EA_DEBUG_DROP"):
+                        print(f"  drop {th} f{st['frame']}: added={added} removed={removed}")
+                    continue
+            kept_steps.append(st)
+        steps_raw = kept_steps
+
     steps_dir = ASSETS_ROOT / "steps"
     steps_dir.mkdir(parents=True, exist_ok=True)
     steps_meta: list[dict[str, Any]] = []
