@@ -411,30 +411,55 @@ class _SettingsPageState extends State<SettingsPage> {
                                 setState(() => _mirrorIndex = value ?? 1);
                                 _saveMirrorSettings();
                               },
-                              child: Column(
-                                children: [
-                                  for (var i = 0;
-                                      i <
-                                          UpdateService
-                                              .downloadMirrors.length;
-                                      i++)
-                                    RadioListTile<int>(
-                                      contentPadding: EdgeInsets.zero,
-                                      dense: true,
-                                      value: i,
-                                      title: Text(UpdateService
-                                          .downloadMirrors[i].label),
-                                      subtitle: UpdateService
-                                              .downloadMirrors[i].prefix.isEmpty
-                                          ? null
-                                          : Text(
-                                              UpdateService
-                                                  .downloadMirrors[i].prefix,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
+                              child: Theme(
+                                data: theme.copyWith(
+                                  dividerColor: Colors.transparent,
+                                ),
+                                child: ExpansionTile(
+                                  tilePadding: EdgeInsets.zero,
+                                  childrenPadding: EdgeInsets.zero,
+                                  backgroundColor: Colors.transparent,
+                                  collapsedBackgroundColor: Colors.transparent,
+                                  title: const Text('选择加速镜像'),
+                                  subtitle: Text(
+                                    _mirrorIndex >= 0 &&
+                                            _mirrorIndex <
+                                                UpdateService
+                                                    .downloadMirrors.length
+                                        ? UpdateService
+                                            .downloadMirrors[_mirrorIndex]
+                                            .label
+                                        : '默认',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color:
+                                          theme.colorScheme.onSurfaceVariant,
                                     ),
-                                ],
+                                  ),
+                                  children: [
+                                    for (var i = 0;
+                                        i <
+                                            UpdateService
+                                                .downloadMirrors.length;
+                                        i++)
+                                      RadioListTile<int>(
+                                        contentPadding: EdgeInsets.zero,
+                                        dense: true,
+                                        value: i,
+                                        title: Text(UpdateService
+                                            .downloadMirrors[i].label),
+                                        subtitle: UpdateService
+                                                .downloadMirrors[i].prefix.isEmpty
+                                            ? null
+                                            : Text(
+                                                UpdateService
+                                                    .downloadMirrors[i]
+                                                    .prefix,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                      ),
+                                  ],
+                                ),
                               ),
                             ),
                           if (!_mirrorLoaded)
