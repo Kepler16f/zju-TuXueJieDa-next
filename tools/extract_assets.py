@@ -1088,7 +1088,7 @@ def extract_jieti_steps(
         canvas = Image.new("RGBA", (STAGE_W, STAGE_H), (255, 255, 255, 255))
         step_notes: list[str] = []
         drew_any_sprite = False
-        drawn_strokes: list[tuple[int, int, int, int]] = []
+        drawn_strokes: list[dict[str, Any]] = []
 
         for ch in sorted(fr.keys()):
             if ch < 6:
@@ -1171,18 +1171,19 @@ def extract_jieti_steps(
             )
             sp_rect = (sp_left, sp_top, sp_left + target_sz[0], sp_top + target_sz[1])
 
-            # Guard: a legacy white-out cover must never erase strokes the
-            # author drew earlier in the same frame. Channel order makes covers
-            # paint last, and trim tiles like jieP77_29 f14 ch34/35 land right
-            # on the ch32/33 vertical flats drawn three channels earlier —
-            # leaving the cross-section contour visibly unclosed for steps 5..8.
-            if (
-                is_cover
-                and rot_centideg == 0
-                and skew_centideg == 0
-                and any(_rects_intersect(sp_rect, r) for r in drawn_strokes)
-            ):
-                continue
+            # A legacy white-out cover must hide the base drawing but must not
+            # erase strokes the author drew earlier in the same frame (channel
+            # order paints covers last). jieP77_29 f14 ch34/35 tiles land right
+            # on the ch32/33 vertical flats drawn three channels earlier, so
+            # the cross-section contour stays unclosed for steps 5..8. Skipping
+            # the tiles entirely is wrong too — they hide base arc segments the
+            # animation is meant to erase. So paint the cover, then repaint the
+            # strokes it clipped.
+            repaint: list[dict[str, Any]] = []
+            if is_cover and rot_centideg == 0 and skew_centideg == 0:
+                repaint = [
+                    s for s in drawn_strokes if _rects_intersect(sp_rect, s["rect"])
+                ]
 
             cache_k = (cmem, ink, fg_rgb, bg_rgb, is_cover)
             if cache_k not in keyed_cache:
@@ -1210,6 +1211,9 @@ def extract_jieti_steps(
                 skew_centideg,
             )
             drew_any_sprite = True
+            # Repaint the strokes this cover clipped (see above).
+            for s in repaint:
+                transform_and_paste_sprite(canvas, s["img"], *s["args"])
             # Remember small drawn strokes so later covers cannot erase them.
             if (
                 not is_cover
@@ -1217,7 +1221,13 @@ def extract_jieti_steps(
                 and skew_centideg == 0
                 and target_sz[0] * target_sz[1] <= 2500
             ):
-                drawn_strokes.append(sp_rect)
+                drawn_strokes.append(
+                    {
+                        "rect": sp_rect,
+                        "img": keyed_cache[cache_k],
+                        "args": (px, py, regX, regY, target_sz, flip_h, flip_v, rot_centideg, skew_centideg),
+                    }
+                )
 
         # Skip trailing empty template wait frames that contain neither sprites nor notes
         if not drew_any_sprite and not step_notes:
