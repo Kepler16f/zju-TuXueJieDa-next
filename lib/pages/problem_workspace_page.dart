@@ -179,7 +179,11 @@ class _ProblemWorkspacePageState extends State<ProblemWorkspacePage> {
             autofocus: true,
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final isDesktop = constraints.maxWidth >= 960;
+                // Landscape phones get the two-pane workspace too (user:
+                // 横屏按横屏窗口适配，而不是竖屏布局旋转).
+                final isLandscape = constraints.maxWidth > constraints.maxHeight;
+                final isDesktop = constraints.maxWidth >= 960 ||
+                    (isLandscape && constraints.maxWidth >= 600);
                 // Below ~400 px five 48 px AppBar action buttons would leave
                 // the title row less than its own 本章题单 menu button wide
                 // (RenderFlex overflow); 上一题/下一题 relocate into the

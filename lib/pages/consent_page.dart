@@ -182,7 +182,12 @@ class _ConsentPageState extends State<ConsentPage> {
                       Expanded(
                         child: OutlinedButton(
                           onPressed: _busy ? null : _decline,
-                          child: const Text('拒绝并退出'),
+                          // 窄屏（手机竖屏）下 flex:1 的空间放不下五个字会换行，
+                          // FittedBox 强制单行并按需缩小字号。
+                          child: const FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('拒绝并退出', maxLines: 1, softWrap: false),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -190,7 +195,10 @@ class _ConsentPageState extends State<ConsentPage> {
                         flex: 2,
                         child: FilledButton(
                           onPressed: (_checked && !_busy) ? _agree : null,
-                          child: Text(_busy ? '正在进入…' : '同意并继续'),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(_busy ? '正在进入…' : '同意并继续', maxLines: 1, softWrap: false),
+                          ),
                         ),
                       ),
                     ],

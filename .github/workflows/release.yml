@@ -551,6 +551,9 @@ jobs:
           cd stage
           # Exclude raw .app from release assets since GitHub Releases API rejects .app extension
           rm -f *.app
+          # 鸿蒙默认只发 unsigned HAP；签名 HAP 仅保留为 workflow artifact，
+          # .app.tar.gz 仅供 AGC 上架（用户：鸿蒙默认 unsigned 发 release）。
+          rm -f *-release.hap
           files=()
           for f in *.apk *.exe *.dmg *.deb *.hap *.ipa *.zip *.tar.gz; do [ -e "$f" ] && files+=("$f"); done
           sha256sum "${files[@]}" > SHA256SUMS.txt
@@ -579,7 +582,7 @@ jobs:
             echo "- macOS 为 dmg（未签名）：首次打开需右键 → 打开，或执行 xattr -cr"
             echo "- iOS IPA 未签名：需自签（AltStore/Sideloadly/TrollStore 等）后安装"
             echo "- Linux 为 deb 包（x64/amd64 与 arm64），安装后从应用菜单启动；视频播放暂未支持"
-            echo "- 鸿蒙端：包含已签名的 release.hap（直接侧载安装）、未签名 unsigned.hap，以及 release.app.tar.gz（用于华为 AGC 上架），应用名统一为「图学习题解答」"
+            echo "- 鸿蒙端：发布 unsigned.hap（安装前需自行签名）；release.app.tar.gz 仅供华为 AGC 上架使用，应用名统一为「图学习题解答」"
             echo "- Windows 安装包：包含 arm64 与 x64 架构"
             echo "- Web 端：解压即用的网页端静态资源包"
             echo "- SHA256SUMS.txt 为上述产物的校验和"

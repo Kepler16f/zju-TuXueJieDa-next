@@ -107,7 +107,12 @@ class _AppShellState extends State<AppShell> {
           value: overlayStyle,
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final isDesktop = constraints.maxWidth >= _desktopBreakpoint;
+              // Landscape (旋转允许后的手机横屏) is a "wide window" too: switch
+              // to the NavigationRail layout instead of rotating the portrait
+              // bottom bar (用户：横屏按横屏窗口适配).
+              final isLandscape = constraints.maxWidth > constraints.maxHeight;
+              final isDesktop = constraints.maxWidth >= _desktopBreakpoint ||
+                  (isLandscape && constraints.maxWidth >= 600);
               final destinations = _buildDestinations();
 
               if (isDesktop) {
@@ -135,6 +140,8 @@ class _AppShellState extends State<AppShell> {
                 extendBody: true,
                 body: IndexedStack(index: selectedIndex, children: pages),
                 bottomNavigationBar: NavigationBar(
+                  // M3 默认 80 偏高，压缩到 64 让底部更紧凑。
+                  height: 64,
                   selectedIndex: selectedIndex,
                   onDestinationSelected: _onDestinationSelected,
                   destinations: destinations
