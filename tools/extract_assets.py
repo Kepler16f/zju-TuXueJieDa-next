@@ -1012,6 +1012,13 @@ def _is_white_cover_patch(img: Image.Image, target_sz: tuple[int, int]) -> bool:
     return True
 
 
+def _rects_intersect(
+    a: tuple[int, int, int, int], b: tuple[int, int, int, int]
+) -> bool:
+    """Half-open rect intersection in stage coordinates."""
+    return not (a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1])
+
+
 def extract_jieti_steps(
     th: str,
     txt_map: dict[str, str],
@@ -1081,6 +1088,7 @@ def extract_jieti_steps(
         canvas = Image.new("RGBA", (STAGE_W, STAGE_H), (255, 255, 255, 255))
         step_notes: list[str] = []
         drew_any_sprite = False
+        drawn_strokes: list[tuple[int, int, int, int]] = []
 
         for ch in sorted(fr.keys()):
             if ch < 6:
@@ -1149,6 +1157,33 @@ def extract_jieti_steps(
             dark_frac = member_dark_frac.get(cmem, 1.0)
             is_cover = (ink == 0) and _is_white_cover_patch(base_sp, target_sz)
 
+            # Destination rect in stage coordinates (unrotated placements only).
+            mw, mh = base_sp.size
+            sp_left = (
+                round(px - (mw - regX) * scale_x)
+                if flip_h
+                else round(px - regX * scale_x)
+            )
+            sp_top = (
+                round(py - (mh - regY) * scale_y)
+                if flip_v
+                else round(py - regY * scale_y)
+            )
+            sp_rect = (sp_left, sp_top, sp_left + target_sz[0], sp_top + target_sz[1])
+
+            # Guard: a legacy white-out cover must never erase strokes the
+            # author drew earlier in the same frame. Channel order makes covers
+            # paint last, and trim tiles like jieP77_29 f14 ch34/35 land right
+            # on the ch32/33 vertical flats drawn three channels earlier —
+            # leaving the cross-section contour visibly unclosed for steps 5..8.
+            if (
+                is_cover
+                and rot_centideg == 0
+                and skew_centideg == 0
+                and any(_rects_intersect(sp_rect, r) for r in drawn_strokes)
+            ):
+                continue
+
             cache_k = (cmem, ink, fg_rgb, bg_rgb, is_cover)
             if cache_k not in keyed_cache:
                 if is_cover:
@@ -1175,6 +1210,14 @@ def extract_jieti_steps(
                 skew_centideg,
             )
             drew_any_sprite = True
+            # Remember small drawn strokes so later covers cannot erase them.
+            if (
+                not is_cover
+                and rot_centideg == 0
+                and skew_centideg == 0
+                and target_sz[0] * target_sz[1] <= 2500
+            ):
+                drawn_strokes.append(sp_rect)
 
         # Skip trailing empty template wait frames that contain neither sprites nor notes
         if not drew_any_sprite and not step_notes:
