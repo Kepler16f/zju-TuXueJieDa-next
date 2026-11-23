@@ -459,13 +459,8 @@ jobs:
           java -jar "$SIGN_JAR" sign-app -mode localSign -keyAlias tuxuejieda -keyPwd "$KS_PASS" -appCertFile signing/chain.cer -profileFile signing/app.p7b -inForm zip -signAlg SHA256withECDSA -keystoreFile signing/ohos_release.p12 -keystorePwd "$KS_PASS" -inFile "dist/tuxuejieda-HarmonyOS-${{ inputs.version }}-unsigned.app" -outFile "tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app"
           java -jar "$SIGN_JAR" verify-app -inFile "tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app" -outCertChain signed/cert-chain.cer -outProfile signed/profile.p7b || true
           ls -la *.app
-      - name: Pack .app into tar.gz (artifacts extract zips, which would drop the signature block)
-        if: env.HAVE_SIGNING == 'true'
-        run: |
-          set -e
-          tar czf "tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app.tar.gz" \
-            "tuxuejieda-HarmonyOS-${{ inputs.version }}-release.app"
-          ls -la *.tar.gz
+      # 不再打包 .app.tar.gz（用户：app 只用于上架）：签名 .app 以 workflow
+      # artifact（archive: false 原始文件）交付，Release 只发 unsigned.hap。
       - uses: actions/upload-artifact@v7
         if: env.HAVE_SIGNING == 'true'
         with:
@@ -582,7 +577,7 @@ jobs:
             echo "- macOS 为 dmg（未签名）：首次打开需右键 → 打开，或执行 xattr -cr"
             echo "- iOS IPA 未签名：需自签（AltStore/Sideloadly/TrollStore 等）后安装"
             echo "- Linux 为 deb 包（x64/amd64 与 arm64），安装后从应用菜单启动；视频播放暂未支持"
-            echo "- 鸿蒙端：发布 unsigned.hap（安装前需自行签名）；release.app.tar.gz 仅供华为 AGC 上架使用，应用名统一为「图学习题解答」"
+            echo "- 鸿蒙端：发布 unsigned.hap（安装前需自行签名）；签名 .app 仅作为 workflow 产物供华为 AGC 上架使用，应用名统一为「图学习题解答」"
             echo "- Windows 安装包：包含 arm64 与 x64 架构"
             echo "- Web 端：解压即用的网页端静态资源包"
             echo "- SHA256SUMS.txt 为上述产物的校验和"
