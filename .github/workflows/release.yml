@@ -476,13 +476,6 @@ jobs:
           archive: false
           if-no-files-found: error
       - uses: actions/upload-artifact@v7
-        if: env.HAVE_SIGNING == 'true'
-        with:
-          name: ohos-app-tar
-          path: tuxuejieda-HarmonyOS-*-release.app.tar.gz
-          archive: false
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v7
         with:
           name: ohos-hap-unsigned
           path: tuxuejieda-HarmonyOS-arm64-*-unsigned.hap
