@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>页面不存在 · 图学基础教程习题解答</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<style>
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+       background:#f6f8fb;color:#16202c;font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+  .box{text-align:center;padding:32px;max-width:520px;width:min(92vw,520px)}
+  .code{font-size:72px;font-weight:800;color:#1f4e8c;letter-spacing:2px;line-height:1}
+  h1{margin:8px 0 10px;font-size:20px}
+  p{color:#5b6b7c;font-size:14px;line-height:1.7}
+  .row{display:flex;gap:10px;justify-content:center;margin-top:22px;flex-wrap:wrap}
+  a.btn,button.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;
+        padding:10px 20px;border-radius:999px;text-decoration:none;cursor:pointer;
+        font-size:14px;font-weight:600;font-family:inherit;border:1px solid #d8e2ee;
+        background:#fff;color:#1f4e8c}
+  a.btn.primary{background:#1f4e8c;border-color:#1f4e8c;color:#fff}
+  a.btn:hover,button.btn:hover{filter:brightness(1.05);text-decoration:none}
+</style>
+</head>
+<body>
+  <div class="box">
+    <div class="code">404</div>
+    <h1>没有找到这个页面</h1>
+    <p>图学基础教程习题解答共 177 道习题，<br>题面、答案、分步图解与 67 段动画演示都在下面这些入口里。</p>
+    <div class="row">
+      <a class="btn primary" href="/">进入习题解答应用</a>
+      <a class="btn" href="/gallery.html">打开资源库</a>
+      <a class="btn" id="backupBtn" href="#" rel="nofollow" hidden>备用入口</a>
+    </div>
+  </div>
+  <script>
+    // 备用入口地址放在 backup.json，域名变更时只改那个文件
+    fetch('/backup.json', { cache: 'no-cache' }).then(function (r) { return r.json(); })
+      .then(function (cfg) {
+        var b = document.getElementById('backupBtn');
+        if (cfg && cfg.backup && b) { b.href = cfg.backup; b.hidden = false; }
+      }).catch(function () {});
+  </script>
+</body>
+</html>

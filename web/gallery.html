@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>图学基础教程习题解答 · 资源库</title>
+<meta name="description" content="浙江大学《图学基础教程》177 道习题的题面、答案、分步图解与动画演示素材索引，支持在线预览与原文件下载。">
+<link rel="icon" type="image/png" href="favicon.png">
+<style>
+  :root{
+    --bg:#f6f8fb; --panel:#fff; --ink:#16202c; --sub:#5b6b7c; --line:#e3e9f0;
+    --brand:#1f4e8c; --brand-soft:#e8f0fa; --hot:#b45309; --hot-soft:#fdf3e3;
+    --radius:14px; --shadow:0 1px 2px rgba(16,24,40,.05),0 8px 24px rgba(16,24,40,.06);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--ink); min-height:100vh;
+    font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
+    font-size:15px; line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--brand);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* ---------- 顶栏 ---------- */
+  .topbar{
+    position:sticky; top:0; z-index:50; display:flex; align-items:center; gap:16px;
+    padding:12px 24px; background:rgba(255,255,255,.88); backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);
+  }
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px;letter-spacing:.2px}
+  .brand .dot{width:10px;height:10px;border-radius:50%;background:var(--brand);box-shadow:0 0 0 4px var(--brand-soft)}
+  .brand small{font-weight:500;color:var(--sub);font-size:12.5px;margin-left:2px}
+  .topbar .spacer{flex:1}
+  .btn-back{
+    display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:999px;
+    background:var(--brand);color:#fff;font-size:13.5px;font-weight:600;white-space:nowrap;
+  }
+  .btn-back:hover{background:#17396a;text-decoration:none}
+
+  /* ---------- 概览 ---------- */
+  .hero{padding:28px 24px 8px;max-width:1440px;margin:0 auto}
+  .hero h1{margin:0 0 6px;font-size:26px;letter-spacing:.3px}
+  .hero p{margin:0;color:var(--sub);font-size:14px;max-width:760px}
+  .stats{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;
+    max-width:1440px;margin:18px auto 0;padding:0 24px;
+  }
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--shadow)}
+  .stat b{display:block;font-size:22px;line-height:1.25;letter-spacing:.4px}
+  .stat span{color:var(--sub);font-size:12.5px}
+
+  /* ---------- 工具条 ---------- */
+  .toolbar{
+    position:sticky;top:53px;z-index:40;background:rgba(246,248,251,.94);backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line);padding:12px 24px;margin-top:22px;
+    display:flex;flex-wrap:wrap;gap:10px;align-items:center;
+  }
+  .tabs{display:inline-flex;background:#e9eef5;border-radius:999px;padding:3px}
+  .tabs button{
+    border:0;background:transparent;padding:7px 16px;border-radius:999px;cursor:pointer;
+    font-size:13.5px;font-weight:600;color:var(--sub);font-family:inherit;
+  }
+  .tabs button[aria-selected="true"]{background:#fff;color:var(--brand);box-shadow:0 1px 3px rgba(16,24,40,.12)}
+  .field{position:relative;display:flex;align-items:center}
+  .field input,.field select{
+    font-family:inherit;font-size:13.5px;color:var(--ink);background:#fff;border:1px solid var(--line);
+    border-radius:10px;padding:8px 12px;outline:none;
+  }
+  .field input{width:240px;padding-left:34px}
+  .field input:focus,.field select:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+  .field .ico{position:absolute;left:11px;color:var(--sub);font-size:13px;pointer-events:none}
+  .count-note{color:var(--sub);font-size:12.5px;margin-left:auto}
+
+  /* ---------- 内容区 ---------- */
+  main{max-width:1440px;margin:0 auto;padding:20px 24px 70px}
+  .empty{padding:60px 0;text-align:center;color:var(--sub)}
+  .sentinel{height:40px;display:flex;align-items:center;justify-content:center;color:var(--sub);font-size:13px}
+
+  /* ---------- 题目卡片 ---------- */
+  .chapter-block{margin-bottom:26px}
+  .chapter-head{
+    display:flex;align-items:baseline;gap:12px;margin:0 0 12px;padding-bottom:8px;border-bottom:2px solid var(--brand-soft);
+  }
+  .chapter-head h2{margin:0;font-size:18px;color:var(--brand)}
+  .chapter-head span{color:var(--sub);font-size:13px}
+  .pcard{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden}
+  .pcard-head{display:flex;gap:14px;align-items:flex-start;padding:14px 16px;cursor:pointer;user-select:none}
+  .pcard-head:hover{background:#fafcff}
+  .pcard-thumb{
+    width:104px;height:78px;flex:none;border-radius:9px;object-fit:contain;background:#eef2f7;
+    border:1px solid var(--line);cursor:zoom-in;
+  }
+  .pcard-meta{flex:1;min-width:0}
+  .pcard-meta h3{margin:0 0 3px;font-size:15.5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .tag{font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--brand-soft);color:var(--brand)}
+  .tag.vid{background:var(--hot-soft);color:var(--hot)}
+  .pcard-meta p{margin:0;color:var(--sub);font-size:13.5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .chev{color:var(--sub);font-size:18px;transition:transform .18s;line-height:1}
+  .pcard.open .chev{transform:rotate(90deg)}
+  .pcard-body{display:none;padding:4px 16px 18px;border-top:1px dashed var(--line)}
+  .pcard.open .pcard-body{display:block}
+  .sub-h{font-size:13px;font-weight:700;color:var(--brand);margin:16px 0 8px;display:flex;align-items:center;gap:8px}
+  .sub-h::after{content:"";flex:1;height:1px;background:var(--line)}
+
+  .pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+  .shot{border:1px solid var(--line);border-radius:11px;overflow:hidden;background:#fbfcfe}
+  .shot .cap{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;font-size:12.5px;color:var(--sub);border-bottom:1px solid var(--line);background:#f8fafc}
+  .shot .cap b{color:var(--ink);font-weight:600}
+  .shot img{display:block;width:100%;height:auto;max-height:420px;object-fit:contain;background:#fff;cursor:zoom-in}
+  .dl{font-size:12px;color:var(--brand);font-weight:600;white-space:nowrap}
+
+  .steps{display:flex;gap:10px;overflow-x:auto;padding:4px 2px 10px;scroll-snap-type:x proximity}
+  .step{flex:none;width:172px;scroll-snap-align:start}
+  .step .thumb{
+    display:block;width:172px;height:124px;object-fit:contain;background:#fff;border:1px solid var(--line);
+    border-radius:9px;cursor:zoom-in;
+  }
+  .step .t{font-size:12px;color:var(--sub);margin-top:5px;display:flex;justify-content:space-between;gap:6px}
+  .step .t b{color:var(--ink);font-weight:600}
+  .note{font-size:12.5px;color:var(--sub);margin:4px 0 0;line-height:1.5}
+
+  .vplayer{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
+  .vthumb{position:relative;width:220px;border-radius:11px;overflow:hidden;border:1px solid var(--line);background:#000;cursor:pointer}
+  .vthumb img{display:block;width:100%;height:124px;object-fit:cover}
+  .vthumb .play{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    background:rgba(10,18,28,.28);color:#fff;font-size:34px;pointer-events:none;
+  }
+  .vplayer video{width:320px;max-width:100%;border-radius:11px;border:1px solid var(--line);background:#000}
+  .vinfo{font-size:12.5px;color:var(--sub)}
+
+  /* ---------- 资源网格 ---------- */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:12px}
+  .fcell{background:var(--panel);border:1px solid var(--line);border-radius:11px;overflow:hidden;box-shadow:var(--shadow);display:flex;flex-direction:column}
+  .fcell .box{height:132px;background:#f4f7fb;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:zoom-in;position:relative}
+  .fcell .box img{width:100%;height:100%;object-fit:contain}
+  .fcell .box video{width:100%;height:100%;object-fit:cover}
+  .fcell .box .play{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    background:rgba(10,18,28,.22);color:#fff;font-size:28px;pointer-events:none;
+  }
+  .fcell .meta{padding:8px 10px;display:flex;flex-direction:column;gap:3px;flex:1}
+  .fcell .fn{font-size:12px;font-weight:600;word-break:break-all;line-height:1.35}
+  .fcell .fn2{font-size:11px;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fcell .fs{font-size:11.5px;color:var(--sub);display:flex;justify-content:space-between;gap:6px;align-items:center}
+  .ext{font-size:10.5px;font-weight:700;text-transform:uppercase;padding:1px 6px;border-radius:5px;background:#eef2f7;color:var(--sub)}
+  .ext.video{background:var(--hot-soft);color:var(--hot)}
+
+  /* ---------- 灯箱 ---------- */
+  .lightbox{
+    position:fixed;inset:0;z-index:200;background:rgba(12,18,26,.86);display:none;
+    align-items:center;justify-content:center;flex-direction:column;gap:12px;padding:24px;
+  }
+  .lightbox.show{display:flex}
+  .lightbox img{max-width:92vw;max-height:82vh;object-fit:contain;background:#fff;border-radius:8px}
+  .lightbox .lb-bar{display:flex;gap:12px;align-items:center;color:#fff;font-size:13px}
+  .lightbox .lb-bar a{color:#9ecbff}
+  .lightbox .close{position:absolute;top:16px;right:20px;color:#fff;font-size:26px;cursor:pointer;line-height:1}
+
+  footer{border-top:1px solid var(--line);padding:18px 24px;color:var(--sub);font-size:12.5px;text-align:center}
+  @media (max-width:640px){
+    .hero{padding:20px 16px 4px}.stats{padding:0 16px}.toolbar{padding:10px 16px;top:53px}
+    main{padding:16px 16px 60px}.field input{width:100%}.toolbar .field{flex:1}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>图学基础教程习题解答 <small>资源库</small></div>
+  <div class="spacer"></div>
+  <a class="btn-back" href="index.html">← 返回应用</a>
+</div>
+
+<section class="hero">
+  <h1>素材总览</h1>
+  <p id="heroDesc">加载中…</p>
+</section>
+<section class="stats" id="stats"></section>
+
+<div class="toolbar">
+  <div class="tabs" role="tablist">
+    <button role="tab" data-view="problems" aria-selected="true">按题目浏览</button>
+    <button role="tab" data-view="files" aria-selected="false">全部资源</button>
+  </div>
+  <label class="field"><span class="ico">🔍</span><input id="q" type="search" placeholder="搜索题号 / 题面 / 文件名" autocomplete="off"></label>
+  <label class="field"><select id="chapter"></select></label>
+  <label class="field"><select id="kind">
+    <option value="">全部类型</option>
+    <option value="image">图片</option>
+    <option value="video">视频</option>
+    <option value="doc">数据/文档</option>
+    <option value="font">字体</option>
+  </select></label>
+  <span class="count-note" id="countNote"></span>
+</div>
+
+<main id="content"></main>
+
+<div class="lightbox" id="lightbox">
+  <span class="close" id="lbClose">×</span>
+  <img id="lbImg" alt="">
+  <div class="lb-bar">
+    <span id="lbName"></span>
+    <a id="lbDownload" download>下载原文件</a>
+  </div>
+</div>
+
+<footer id="foot"></footer>
+
+<script>
+(function(){
+  "use strict";
+
+  var state = {data:null, view:"problems", q:"", chapter:"", kind:"", rendered:0, page:24};
+
+  var $ = function(s){return document.querySelector(s);};
+  var content = $("#content");
+
+  function fmtSize(n){
+    if(n==null) return "";
+    if(n<1024) return n+" B";
+    if(n<1048576) return (n/1024).toFixed(1)+" KB";
+    return (n/1048576).toFixed(1)+" MB";
+  }
+  function esc(s){
+    return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+  function matchText(hay, needle){
+    if(!needle) return true;
+    return String(hay||"").toLowerCase().indexOf(needle)>=0;
+  }
+  /* 缩略图映射：assets/assets/<组>/<名>.<ext>  →  thumbs/<组>/<名>.webp（256px） / mid/<组>/<名>.webp（800px）
+     画廊网格与步骤条用缩略图（原图按需再取），实测单页图片流量从 8.2MB 降到 0.8MB。 */
+  function thumbUrl(url, kind){
+    var m = /assets\/assets\/([a-z]+)\//.exec(url || "");
+    if(!m) return url;
+    var name = url.split("/").pop().replace(/\.[^.]+$/, "");
+    return kind + "/" + m[1] + "/" + name + ".webp";
+  }
+
+  /* ---------------- 数据加载 ---------------- */
+  fetch("gallery/data.json").then(function(r){return r.json();}).then(function(d){
+    state.data = d;
+    buildMeta();
+    buildFilters();
+    render();
+  }).catch(function(e){
+    content.innerHTML = '<div class="empty">数据加载失败：'+esc(e.message)+'</div>';
+  });
+
+  function buildMeta(){
+    var m = state.data.meta, c = m.counts||{};
+    state.plook = {};
+    state.data.problems.forEach(function(p){ state.plook[p.id]=p; });
+    $("#heroDesc").textContent = m.subtitle;
+    var cards = [
+      [m.problemCount,"习题总数"],
+      [state.data.chapters.length,"章节"],
+      [(c.image||0),"图片素材"],
+      [(c.video||0),"动画视频"],
+      [fmtSize(m.totalBytes),"素材总体积"]
+    ];
+    $("#stats").innerHTML = cards.map(function(x){
+      return '<div class="stat"><b>'+esc(x[0])+'</b><span>'+esc(x[1])+'</span></div>';
+    }).join("");
+    $("#foot").innerHTML = "图学基础教程习题解答 · 资源库 &nbsp;|&nbsp; 共 " +
+      m.resourceCount + " 个素材文件 &nbsp;|&nbsp; 所有资源均可在线预览并下载原文件";
+  }
+
+  function buildFilters(){
+    var sel = $("#chapter");
+    sel.innerHTML = '<option value="">全部章节</option>' + state.data.chapters.map(function(ch){
+      return '<option value="'+esc(ch.id)+'">'+esc(ch.title)+'（'+ch.count+' 题）</option>';
+    }).join("");
+    ["#q","#chapter","#kind"].forEach(function(s){
+      $(s).addEventListener("input", function(){
+        state.q = $("#q").value.trim().toLowerCase();
+        state.chapter = $("#chapter").value;
+        state.kind = $("#kind").value;
+        resetAndRender();
+      });
+    });
+    document.querySelectorAll(".tabs button").forEach(function(b){
+      b.addEventListener("click", function(){
+        document.querySelectorAll(".tabs button").forEach(function(x){x.setAttribute("aria-selected","false");});
+        b.setAttribute("aria-selected","true");
+        state.view = b.dataset.view;
+        resetAndRender();
+      });
+    });
+  }
+
+  function resetAndRender(){
+    state.rendered = 0;
+    content.innerHTML = "";
+    render();
+  }
+
+  /* ---------------- 题目视图 ---------------- */
+  function filteredProblems(){
+    var d = state.data;
+    return d.problems.filter(function(p){
+      if(state.chapter && p.chapterId!==state.chapter) return false;
+      if(state.kind){
+        var kinds = [];
+        if(p.subject) kinds.push(p.subject.kind);
+        if(p.answer) kinds.push(p.answer.kind);
+        if(p.video) kinds.push("video");
+        p.steps.forEach(function(s){kinds.push(s.kind);});
+        if(kinds.indexOf(state.kind)<0) return false;
+      }
+      if(state.q){
+        var hay = p.searchText || ([p.id,p.label,p.statement,p.page,p.no].join(" "));
+        if(!matchText(hay,state.q)) return false;
+      }
+      return true;
+    });
+  }
+
+  function problemCard(p){
+    var ch = state.data.chapters.filter(function(c){return c.id===p.chapterId;})[0]||{title:""};
+    var h = [];
+    h.push('<article class="pcard" data-id="'+esc(p.id)+'">');
+    h.push('<div class="pcard-head">');
+    if(p.subject){
+      h.push('<img class="pcard-thumb" loading="lazy" decoding="async" src="'+esc(thumbUrl(p.subject.url,"thumbs"))+'" data-full="'+esc(p.subject.url)+'" alt="'+esc(p.label)+' 题面">');
+    } else {
+      h.push('<div class="pcard-thumb"></div>');
+    }
+    h.push('<div class="pcard-meta">');
+    h.push('<h3>'+esc(p.label)+'<span class="tag">'+esc(ch.title)+'</span>'+
+           (p.video?'<span class="tag vid">含动画</span>':'')+'</h3>');
+    h.push('<p>'+esc(p.statement)+'</p>');
+    h.push('</div><div class="chev">›</div></div>');
+
+    h.push('<div class="pcard-body">');
+    if(p.subject||p.answer){
+      h.push('<div class="sub-h">题面与答案</div><div class="pair">');
+      if(p.subject) h.push(shot(p.subject,"原题题面"));
+      if(p.answer) h.push(shot(p.answer,"参考答案"));
+      h.push('</div>');
+    }
+    if(p.steps.length){
+      h.push('<div class="sub-h">分步图解（'+p.steps.length+' 步）</div><div class="steps">');
+      p.steps.forEach(function(s){
+        h.push('<div class="step"><img class="thumb" loading="lazy" decoding="async" src="'+esc(thumbUrl(s.url,"thumbs"))+'" data-full="'+esc(s.url)+'" alt="'+esc(s.title)+'">');
+        h.push('<div class="t"><b>'+esc(s.title)+'</b><a class="dl" href="'+esc(s.url)+'" download>下载</a></div>');
+        if(s.note) h.push('<p class="note">'+esc(s.note)+'</p>');
+        h.push('</div>');
+      });
+      h.push('</div>');
+    }
+    if(p.video){
+      h.push('<div class="sub-h">动画演示</div><div class="vplayer">');
+      h.push('<div class="vthumb" data-video="'+esc(p.video.url)+'"><img loading="lazy" decoding="async" src="'+esc(p.video.poster||p.video.url)+'" alt="动画预览">'+
+             '<span class="play">▶</span></div>');
+      h.push('<div class="vinfo">文件 '+esc(p.video.name)+' · '+fmtSize(p.video.size)+
+             '<br><a class="dl" href="'+esc(p.video.url)+'" download>下载视频原文件</a>'+
+             (p.video.sourceAvi?'<br>原始素材：'+esc(p.video.sourceAvi):'')+'</div>');
+      h.push('</div>');
+    }
+    h.push('</div></article>');
+    return h.join("");
+  }
+
+  function shot(info, title){
+    return '<figure class="shot" style="margin:0">'+
+      '<figcaption class="cap"><b>'+esc(title)+'</b><a class="dl" href="'+esc(info.url)+'" download>下载 '+esc(info.ext)+'</a></figcaption>'+
+      '<img loading="lazy" decoding="async" src="'+esc(thumbUrl(info.url,"mid"))+'" data-full="'+esc(info.url)+'" alt="'+esc(title)+'">'+
+      '</figure>';
+  }
+
+  /* ---------------- 资源网格 ---------------- */
+  function filteredFiles(){
+    var plook = {};
+    state.data.problems.forEach(function(p){ plook[p.id]=p; });
+    return state.data.resources.filter(function(r){
+      if(state.kind && r.kind!==state.kind) return false;
+      if(state.chapter){
+        var p = r.problemId ? plook[r.problemId] : null;
+        if(!p || p.chapterId!==state.chapter) return false;
+      }
+      if(state.q){
+        var p = r.problemId ? plook[r.problemId] : null;
+        var hay = r.name + " " + r.group;
+        if(p) hay += " " + (p.searchText || (p.label + " " + p.statement + " " + p.id));
+        if(!matchText(hay,state.q)) return false;
+      }
+      return true;
+    });
+  }
+
+  function fileCell(r){
+    var inner, attrs;
+    var p = state.plook && r.problemId ? state.plook[r.problemId] : null;
+    if(r.kind==="image"){
+      inner = '<img loading="lazy" decoding="async" src="'+esc(thumbUrl(r.url,"thumbs"))+'" alt="'+esc(r.name)+'">';
+      attrs = 'data-zoom="'+esc(r.url)+'" data-name="'+esc(r.name)+'"';
+    } else if(r.kind==="video"){
+      var poster = r.name.replace(/\.\w+$/,"");
+      inner = '<img loading="lazy" decoding="async" src="gallery/posters/'+esc(poster)+'.jpg" alt="'+esc(r.name)+'">'+
+              '<span class="play">▶</span>';
+      attrs = 'data-video="'+esc(r.url)+'" data-name="'+esc(r.name)+'"';
+    } else {
+      inner = '<span style="font-size:30px;color:#9aa8b8">📄</span>';
+      attrs = 'data-zoom="'+esc(r.url)+'" data-name="'+esc(r.name)+'"';
+    }
+    return '<figure class="fcell" style="margin:0">'+
+      '<div class="box" '+attrs+'>'+inner+'</div>'+
+      '<figcaption class="meta"><span class="fn">'+esc(r.name)+'</span>'+
+      (p?'<span class="fn2">'+esc(p.label)+'</span>':'')+
+      '<span class="fs"><span><span class="ext '+(r.kind==="video"?"video":"")+'">'+esc(r.ext)+'</span> '+fmtSize(r.size)+'</span>'+
+      '<a class="dl" href="'+esc(r.url)+'" download>下载</a></span></figcaption></figure>';
+  }
+
+  /* ---------------- 渲染 ---------------- */
+  var sentinel = null, observer = null;
+
+  function render(){
+    if(observer){observer.disconnect();observer=null;}
+    if(sentinel){sentinel.remove();sentinel=null;}
+    if(state.view==="problems") renderProblems(); else renderFiles();
+  }
+
+  function renderProblems(){
+    var list = filteredProblems();
+    var total = list.length;
+    // 按章节分组
+    var groups = [], idx = {};
+    list.forEach(function(p){
+      if(!idx[p.chapterId]){idx[p.chapterId]={ch:null,items:[]};groups.push(idx[p.chapterId]);}
+      var ch = state.data.chapters.filter(function(c){return c.id===p.chapterId;})[0]||{title:p.chapterId};
+      idx[p.chapterId].ch = ch;
+      idx[p.chapterId].items.push(p);
+    });
+    if(!total){
+      content.innerHTML='<div class="empty">没有匹配的资源</div>';
+      $("#countNote").textContent="0 项";
+      return;
+    }
+    var html = groups.map(function(g){
+      return '<section class="chapter-block"><div class="chapter-head"><h2>'+esc(g.ch.title)+'</h2><span>'+esc(g.ch.subtitle||"")+'</span></div>'+
+        g.items.map(problemCard).join("")+'</section>';
+    }).join("");
+    content.innerHTML = html;
+    $("#countNote").textContent = total + " 道习题";
+    bindCardEvents();
+  }
+
+  function renderFiles(){
+    var list = filteredFiles();
+    var total = list.length;
+    $("#countNote").textContent = total + " 个文件";
+    if(!total){ content.innerHTML='<div class="empty">没有匹配的资源</div>'; return; }
+    content.innerHTML = '<div class="grid" id="grid"></div><div class="sentinel" id="sentinel">加载中…</div>';
+    var grid = $("#grid");
+    var i = 0;
+    function chunk(){
+      var slice = list.slice(i, i+120);
+      grid.insertAdjacentHTML("beforeend", slice.map(fileCell).join(""));
+      i += slice.length;
+      if(i>=total){ $("#sentinel").textContent = "已加载全部 "+total+" 个文件"; return; }
+      $("#sentinel").textContent = "继续加载（"+i+"/"+total+"）…";
+    }
+    chunk();
+    sentinel = $("#sentinel");
+    observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){ if(e.isIntersecting) chunk(); });
+    },{rootMargin:"600px"});
+    observer.observe(sentinel);
+  }
+
+  /* ---------------- 交互 ---------------- */
+  function bindCardEvents(){
+    content.querySelectorAll(".pcard-head").forEach(function(head){
+      head.addEventListener("click", function(ev){
+        if(ev.target.tagName==="IMG"&&ev.target.classList.contains("pcard-thumb")){
+          openLightbox(ev.target.getAttribute("data-full") || ev.target.getAttribute("src"), ev.target.getAttribute("alt"));
+          return;
+        }
+        head.parentElement.classList.toggle("open");
+      });
+    });
+    content.querySelectorAll(".shot img,.step .thumb").forEach(function(img){
+      img.addEventListener("click", function(){
+        openLightbox(img.getAttribute("data-full") || img.getAttribute("src"), img.getAttribute("alt"));
+      });
+    });
+    content.querySelectorAll(".vthumb").forEach(function(v){
+      v.addEventListener("click", function(){
+        var src = v.dataset.video;
+        v.outerHTML = '<video controls autoplay playsinline preload="metadata" src="'+esc(src)+'"></video>';
+      });
+    });
+  }
+
+  /* 全局委托：资源网格里的视频点击播放、图片点击放大（对两个视图都生效） */
+  content.addEventListener("click", function(ev){
+    var vbox = ev.target.closest("[data-video]");
+    if(vbox){
+      ev.preventDefault();
+      vbox.innerHTML = '<video controls autoplay playsinline preload="metadata" src="'+esc(vbox.dataset.video)+'"></video>';
+      return;
+    }
+    var box = ev.target.closest("[data-zoom]");
+    if(box){ openLightbox(box.dataset.zoom, box.dataset.name); }
+  });
+
+  var lb = $("#lightbox"), lbImg = $("#lbImg");
+  function openLightbox(url, name){
+    lbImg.src = url;
+    $("#lbName").textContent = name||"";
+    $("#lbDownload").href = url;
+    lb.classList.add("show");
+  }
+  $("#lbClose").addEventListener("click", function(){lb.classList.remove("show");});
+  lb.addEventListener("click", function(ev){ if(ev.target===lb) lb.classList.remove("show");});
+  document.addEventListener("keydown", function(ev){ if(ev.key==="Escape") lb.classList.remove("show"); });
+})();
+</script>
+</body>
+</html>

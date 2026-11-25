@@ -500,6 +500,11 @@ jobs:
           sed -i "s/^version: .*/version: ${{ inputs.version }}+${{ inputs.build_number }}/" pubspec.yaml
           flutter pub get
           flutter build web --release --wasm --build-name=${{ inputs.version }} --build-number=${{ inputs.build_number }}
+      - name: Build web layer (资源库 / 缩略图 / 字体本地化)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq python3-pil
+          bash tools/build_web_layer.sh build/web
       - name: Package Web zip
         run: |
           cd build/web

@@ -1,0 +1,8 @@
+{
+  "primary": "https://tuxuedaan.pages.dev",
+  "backup": "https://kepler16f.de5.net",
+  "mirror": "https://ubn1x41h6h9if.space.mcode.cn",
+  "mirror2": "https://taihxoocvw7il.space.mcode.cn",
+  "updated": "2026-11-25",
+  "note": "backup 指向个人站（域名固定不变，是所有入口的目录页）；mirror 是 mcode 平台的国内 CDN 镜像，每次重新发布会换新域名，由 agent 同步本文件并重新发布。"
+}

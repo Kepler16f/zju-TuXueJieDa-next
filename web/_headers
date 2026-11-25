@@ -1,0 +1,64 @@
+# Cloudflare Pages 缓存规则
+# 规则按出现顺序应用，同名 header 后者覆盖前者：
+# 先给全站一个短缓存兜底，再对带指纹/不可变资源放开长缓存。
+
+/*
+  Cache-Control: public, max-age=300
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/canvaskit/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/gallery/posters/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/main.dart.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/main.dart.wasm
+  Cache-Control: public, max-age=31536000, immutable
+
+/main.dart.mjs
+  Cache-Control: public, max-age=31536000, immutable
+
+/flutter.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/flutter_bootstrap.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/gallery/data.json
+  Cache-Control: public, max-age=600
+
+/backup.json
+  Cache-Control: public, max-age=60
+
+/gallery.html
+  Cache-Control: public, max-age=600
+
+/index.html
+  Cache-Control: public, max-age=300
+
+# 根路径单独一条：Pages 默认给 HTML 文档 max-age=0（每次回源校验），显式覆盖成短缓存，
+# 人多时才不会每个访客都打一次源站。
+/
+  Cache-Control: public, max-age=300
+
+/404.html
+  Cache-Control: public, max-age=600
+
+# 安全响应头
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: SAMEORIGIN
+
+# 跨源隔离：启用 SharedArrayBuffer → Flutter skwasm 渲染器多线程，低端机滚动更顺
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp

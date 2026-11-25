@@ -365,9 +365,12 @@ class _SettingsPageState extends State<SettingsPage> {
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    _appVersion.isEmpty
-                                        ? '正在获取版本…'
-                                        : '非官方重制 · 版本 v$_appVersion',
+                                    // 网页版不显示版本号（版本信息在「更新」弹窗里查）
+                                    _isWeb
+                                        ? '非官方重制'
+                                        : (_appVersion.isEmpty
+                                            ? '正在获取版本…'
+                                            : '非官方重制 · 版本 v$_appVersion'),
                                     style: theme.textTheme.bodySmall?.copyWith(
                                       color: theme.colorScheme.onSurfaceVariant,
                                     ),

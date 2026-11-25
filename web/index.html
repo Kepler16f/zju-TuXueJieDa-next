@@ -55,19 +55,237 @@
       font-weight: 600;
       color: #2f3b4c;
     }
+    .boot-tip {
+      margin-top: 6px;
+      font-size: 12.5px;
+      color: #5b6b7c;
+      line-height: 1.8;
+      text-align: center;
+    }
+    .boot-tip a { color: #1f4e8c; }
+    /* 加载慢/失败时的兜底入口 */
+    .boot-fallback {
+      margin-top: 6px;
+      width: min(92vw, 420px);
+      background: #fff;
+      border: 1px solid #dde5ef;
+      border-radius: 14px;
+      padding: 16px 18px;
+      box-shadow: 0 8px 28px rgba(16, 24, 40, .10);
+      text-align: center;
+    }
+    .bf-title { font-size: 13.5px; font-weight: 700; color: #2f3b4c; margin-bottom: 12px; }
+    .bf-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+    .bf-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 9px 16px; border-radius: 10px; font-size: 13.5px; font-weight: 600;
+      text-decoration: none; border: 1px solid #d7e2f1; background: #f6f8fb; color: #1f4e8c;
+      cursor: pointer; font-family: inherit;
+    }
+    .bf-btn.primary { background: #1f4e8c; border-color: #1f4e8c; color: #fff; }
+    .bf-btn:hover { filter: brightness(1.05); }
+    .bf-note { margin-top: 11px; font-size: 12px; color: #6b7a8c; line-height: 1.7; }
+
+    /* ---------- 极速首屏：纯 HTML 先铺内容，Flutter 应用在后台并行加载 ---------- */
+    .quick {
+      position: fixed; inset: 0; z-index: 2147482999; overflow-y: auto;
+      background: #f6f8fb; color: #16202c;
+      font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+      padding: 32px 20px 48px;
+    }
+    @media (prefers-color-scheme: dark) {
+      .quick { background: #10151c; color: #f6f8fa; }
+      .quick .q-lede, .quick .q-status, .quick .q-note { color: #93a0b0; }
+      .quick .q-card { background: #161d27; border-color: #232c38; }
+      .quick .q-lab { color: #f6f8fa; }
+      .quick .q-btn { background: #1a222d; border-color: #2b3542; color: #dce6f2; }
+      .quick .q-btn.primary { background: #2f6fd0; border-color: #2f6fd0; color: #fff; }
+    }
+    .quick-inner { max-width: 1080px; margin: 0 auto; }
+    .q-eyebrow { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: #1f4e8c; letter-spacing: .4px; }
+    @media (prefers-color-scheme: dark) { .quick .q-eyebrow { color: #7db1ff; } }
+    .q-title { margin: 0 0 10px; font-size: 30px; font-weight: 700; letter-spacing: .4px; }
+    .q-lede { margin: 0 0 20px; font-size: 15px; color: #5b6b7c; max-width: 760px; line-height: 1.75; }
+    .q-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+    .q-btn {
+      display: inline-flex; align-items: center; gap: 6px; padding: 12px 22px; border-radius: 12px;
+      font: 600 15px/1.2 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: #fff; border: 1px solid #dde5ef; color: #1f4e8c; text-decoration: none; cursor: pointer;
+    }
+    .q-btn.primary { background: #1f4e8c; border-color: #1f4e8c; color: #fff; }
+    .q-btn:hover { filter: brightness(1.05); text-decoration: none; }
+    .q-status { font-size: 13px; color: #5b6b7c; margin-bottom: 26px; }
+    .q-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 12px; }
+    .q-card {
+      display: block; background: #fff; border: 1px solid #e3e9f0; border-radius: 12px; overflow: hidden;
+      text-decoration: none; color: inherit; transition: transform .15s, border-color .15s;
+    }
+    .q-card:hover { transform: translateY(-2px); border-color: #1f4e8c; text-decoration: none; }
+    .q-card img { display: block; width: 100%; aspect-ratio: 4/3; object-fit: contain; background: #fbfcfe; }
+    .q-lab { display: block; padding: 8px 10px; font-size: 12.5px; font-weight: 600; color: #16202c; }
+    .q-note { margin-top: 22px; font-size: 12.5px; color: #5b6b7c; }
+    /* 应用就绪前隐藏应用内的悬浮入口 */
+    .gallery-fab { display: none; }
+    body.app-ready .gallery-fab { display: inline-flex; }
   </style>
 </head>
 <body>
+  <!-- 极速首屏：纯 HTML，几十 KB 内就能把内容铺出来；Flutter 应用在后台并行加载 -->
+  <div id="quick" class="quick">
+    <div class="quick-inner">
+      <p class="q-eyebrow">浙江大学《图学基础教程》配套</p>
+      <h1 class="q-title">图学基础教程习题解答</h1>
+      <p class="q-lede">
+        177 道习题的原题题面、参考答案对照与分步图解，67 道题另配动画演示。
+        全部素材可在线预览并下载原文件。
+      </p>
+      <div class="q-actions">
+        <button class="q-btn primary" id="qApp" type="button">进入交互式应用</button>
+        <a class="q-btn" href="gallery.html">打开资源库</a>
+      </div>
+      <div class="q-status" id="qStatus">交互式应用正在后台加载…（首次访问需下载约 1MB 渲染引擎，可先看下面的题目速览）</div>
+      <div class="q-grid" id="qGrid"></div>
+      <div class="q-note">题目速览 · 点击进入对应习题；应用就绪后本页会自动切换为完整应用。</div>
+    </div>
+  </div>
+
   <div id="boot-splash" class="boot-splash">
     <div class="boot-spinner"></div>
     <div class="boot-label">正在加载图学基础教程习题解答...</div>
+    <div class="boot-tip" id="boot-tip" hidden>正在下载渲染引擎（约 1 MB，CDN 已压缩）…</div>
+    <div class="boot-fallback" id="boot-fallback" hidden>
+      <div class="bf-title">加载较慢或被网络挡住了？换这些入口</div>
+      <div class="bf-actions">
+        <a class="bf-btn primary" href="gallery.html">直接打开资源库</a>
+        <a class="bf-btn" id="bf-backup" href="#" rel="nofollow" hidden>备用入口</a>
+        <a class="bf-btn" id="bf-mirror" href="#" rel="nofollow" hidden>国内镜像</a>
+        <button class="bf-btn" id="bf-retry" type="button">重新加载</button>
+      </div>
+      <div class="bf-note">资源库包含全部题面、答案、分步图解与动画，不依赖渲染引擎，打开更快。</div>
+    </div>
   </div>
   <script>
     window.addEventListener('flutter-first-frame', function () {
       var el = document.getElementById('boot-splash');
       if (el) el.remove();
+      var q = document.getElementById('quick');
+      if (q) q.remove();
+      document.body.classList.add('app-ready');
     });
+
+    // 极速首屏：先铺题目速览（缩略图每张仅约 2.5KB），应用就绪后自动让位
+    (function () {
+      var grid = document.getElementById('qGrid');
+      var status = document.getElementById('qStatus');
+      var appBtn = document.getElementById('qApp');
+      if (!grid) return;
+
+      // 速览只拉 1.2KB 的 quick.json（16 条标签+缩略图路径），不碰 569KB 的完整数据
+      fetch('gallery/quick.json', { cache: 'force-cache' }).then(function (r) { return r.json(); })
+        .then(function (d) {
+          var list = d.items || [];
+          grid.innerHTML = list.map(function (p) {
+            return '<a class="q-card" href="gallery.html">' +
+              (p.thumb ? '<img loading="lazy" decoding="async" src="' + p.thumb + '" alt="">' : '') +
+              '<span class="q-lab">' + (p.label || '') + '</span></a>';
+          }).join('');
+        }).catch(function () { /* 取不到也不影响首屏 */ });
+
+      if (appBtn) appBtn.addEventListener('click', function () {
+        if (status) status.textContent = '正在进入…（若长时间无响应可刷新重试，或先用上方「打开资源库」）';
+      });
+    })();
+
+    // 兜底逻辑：主站是纯静态站（Cloudflare CDN），与任何运行中的服务无关；
+    // 这里只是给「网络慢 / 被挡」的用户一条不依赖渲染引擎的出路。
+    (function () {
+      var tip = document.getElementById('boot-tip');
+      var fb = document.getElementById('boot-fallback');
+      var backup = document.getElementById('bf-backup');
+      var retry = document.getElementById('bf-retry');
+      var alive = function () { return !!document.getElementById('boot-splash'); };
+
+      setTimeout(function () {
+        if (tip && alive()) { tip.hidden = false; }
+      }, 8000);
+
+      setTimeout(function () {
+        if (fb && alive()) { fb.hidden = false; }
+      }, 20000);
+
+      // 备用地址放在 backup.json 里，域名变更时只改这个文件，不用改 HTML
+      fetch('backup.json', { cache: 'no-cache' }).then(function (r) { return r.json(); })
+        .then(function (cfg) {
+          if (!cfg) return;
+          if (cfg.backup && backup) { backup.href = cfg.backup; backup.hidden = false; }
+          if (cfg.mirror) {
+            var m = document.getElementById('bf-mirror');
+            if (m) { m.href = cfg.mirror; m.hidden = false; }
+          }
+        }).catch(function () { /* 拿不到就只显示资源库入口 */ });
+
+      if (retry) retry.addEventListener('click', function () { location.reload(); });
+    })();
   </script>
   <script src="flutter_bootstrap.js" async></script>
+
+  <!-- 资源库入口 -->
+  <style>
+    .gallery-fab {
+      position: fixed;
+      right: 16px;
+      bottom: 52px;
+      z-index: 2147483000;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 16px;
+      border-radius: 999px;
+      background: rgba(31, 78, 140, .95);
+      color: #fff;
+      font: 600 13.5px/1.2 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+      text-decoration: none;
+      border: 1px solid rgba(255, 255, 255, .25);
+      box-shadow: 0 6px 20px rgba(16, 24, 40, .28);
+      backdrop-filter: blur(6px);
+      transition: transform .18s ease, background .18s ease;
+    }
+    .gallery-fab:hover { background: #17396a; text-decoration: none; transform: translateY(-1px); }
+    .g-fab-ic { font-size: 14px; line-height: 1; }
+    .g-fab-tx { letter-spacing: .3px; }
+    .g-fab-tx-stack { display: none; }
+
+    /* 手机 / 平板 / 横屏：应用是底部导航栏布局，改为右侧边缘竖排标签，避开所有控件 */
+    @media (max-width: 900px), (max-height: 560px) {
+      .gallery-fab {
+        right: 0;
+        top: 50%;
+        bottom: auto;
+        transform: translateY(-50%);
+        flex-direction: column;
+        gap: 8px;
+        padding: 16px 9px;
+        border-radius: 20px 0 0 20px;
+        border-right: 0;
+        border-color: rgba(255, 255, 255, .22);
+        box-shadow: -4px 6px 18px rgba(16, 24, 40, .26);
+      }
+      .gallery-fab:hover { transform: translateY(-50%); }
+      .g-fab-ic { font-size: 16px; }
+      .g-fab-tx-inline { display: none; }
+      .g-fab-tx-stack { display: block; line-height: 1.12; text-align: center; font-size: 13px; }
+    }
+    /* 横屏或矮屏时上移一点，避开底部导航 */
+    @media (max-width: 720px) and (max-height: 520px) {
+      .gallery-fab { top: 42%; }
+    }
+    /* 应用就绪前隐藏应用内悬浮入口（速览层已提供入口），放在最后以覆盖前面的 display */
+    body:not(.app-ready) .gallery-fab { display: none !important; }
+  </style>
+  <a class="gallery-fab" href="gallery.html" aria-label="打开资源库">
+    <span class="g-fab-ic" aria-hidden="true">📚</span>
+    <span class="g-fab-tx g-fab-tx-inline">资源库</span>
+    <span class="g-fab-tx g-fab-tx-stack" aria-hidden="true">资<br>源<br>库</span>
+  </a>
 </body>
 </html>
